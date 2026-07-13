@@ -1,0 +1,34 @@
+menu:
+  Home: /
+  Archives: /archives
+  About: /about
+
+favicon:
+  enable: true
+  icon: /image/icon/vista_messenger.jpg
+
+profile:
+  enable: true
+  author: ROG
+  avatar: https://avatars.githubusercontent.com/signajm350234-cmyk
+  avatar_link: https://github.com/signajm350234-cmyk
+  social:
+    - name: Github
+      link: https://github.com/signajm350234-cmyk
+      icon: /image/icon/github.png
+    - name: Bilibili
+      link: ''
+      icon: /image/icon/bilibili.png
+
+music:
+  enable: false
+  autoplay: false
+  songs:
+    - title: ''
+      artist: ''
+      cover: ''
+      url: ''
+
+math:
+  enable: true
+  engine: mathjax
