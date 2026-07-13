@@ -10,11 +10,11 @@ favicon:
 profile:
   enable: true
   author: ROG
-  avatar: https://avatars.githubusercontent.com/signajm350234-cmyk
-  avatar_link: https://github.com/signajm350234-cmyk
+  avatar: https://avatars.githubusercontent.com/signaljm350234-cmyk
+  avatar_link: https://github.com/signaljm350234-cmyk
   social:
     - name: Github
-      link: https://github.com/signajm350234-cmyk
+      link: https://github.com/signaljm350234-cmyk
       icon: /image/icon/github.png
     - name: Bilibili
       link: ''
