@@ -1,20 +1,29 @@
-<div class="card post-full">
-    <span class="post-title article-title">
-        <%= page.title %>
-    </span>
-
-    <div class="post-meta">
-        <%= date(page.date, 'YYYY-MM-DD' ) %>
-        <% if (page.tags && page.tags.length) { %>
-            | <%- list_tags(page.tags, {
-                    show_count: false,
-                    style: 'none',
-                    separator: ', '
-                }) %>
-        <% } %>    
+<!-- PC-98 Window: Post Detail -->
+<div class="card post-full pc98-window">
+    <div class="pc98-titlebar">
+        <span class="title-text"><%= page.title %></span>
+        <span>_ &#9744; &#10005;</span>
     </div>
+    <div class="pc98-menubar">
+        <span class="menu-item"><span class="underline">F</span>ile</span>
+        <span class="menu-item"><span class="underline">E</span>dit</span>
+        <span class="menu-item"><span class="underline">V</span>iew</span>
+        <span class="menu-item"><span class="underline">H</span>elp</span>
+    </div>
+    <div class="pc98-window-body">
+        <div class="post-meta">
+            <%= date(page.date, 'YYYY-MM-DD' ) %>
+            <% if (page.tags && page.tags.length) { %>
+                | <%- list_tags(page.tags, {
+                        show_count: false,
+                        style: 'none',
+                        separator: ', '
+                    }) %>
+            <% } %>
+        </div>
 
-    <div class="post-content">
-        <%- page.content %>
+        <div class="post-content">
+            <%- page.content %>
+        </div>
     </div>
 </div>

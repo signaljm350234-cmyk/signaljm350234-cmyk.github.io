@@ -1,5 +1,7 @@
+/* PC-98 Post List & Post Page */
+
 .post-list {
-    margin-top: 20px;
+    margin-top: 0;
 }
 
 .post-item {
@@ -7,21 +9,24 @@
     align-items: stretch;
     gap: 10px;
     padding: 10px;
-    border-radius: 3px;
+    border-radius: 0;
     position: relative;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 
 .post-cover {
-    width: 40%;
+    width: 35%;
     flex-shrink: 0;
-    padding: 10px 0;
+    padding: 6px;
+    background: var(--pc98-terminal);
+    border: solid 1px var(--pc98-border-dark);
 }
 
 .post-cover img {
     width: 100%;
-    box-shadow: 0 0 0 0.5px var(--black-main),
-        0 0 0 1.5px var(--white-main);
+    display: block;
+    box-shadow: none;
+    image-rendering: pixelated;
 }
 
 .post-info {
@@ -31,67 +36,70 @@
 }
 
 .post-full {
-    margin-top: 20px;
-    padding: 10px;
-    border-radius: 3px;
+    margin-top: 0;
+    padding: 0;
+    border-radius: 0;
     position: relative;
-    margin-bottom: 20px;
+    margin-bottom: 0;
 }
 
 .post-title {
     position: relative;
-    font-size: 24px;
-    text-shadow: 0 0 10px var(--white-main),
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main);
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--pc98-blue);
+    text-shadow: none;
+    font-family: var(--font-ui);
 }
 
 .post-meta {
     position: relative;
-    text-shadow: 0 0 10px var(--white-main),
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main);
-    padding: 5px 0;
+    text-shadow: none;
+    padding: 4px 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--pc98-border-light);
 }
 
 .post-excerpt {
     position: relative;
-    padding: 10px;
-    background-color: var(--white-main);
-    box-shadow: 0 0 0 0.5px var(--black-main),
-        0 0 0 1.5px var(--white-main);
+    padding: 8px;
+    background: var(--pc98-white);
+    box-shadow: none;
+    border: solid 1px var(--pc98-border-dark);
+    font-size: 13px;
+    line-height: 1.6;
+    flex: 1;
 }
 
 .post-content {
     position: relative;
-    padding: 10px;
-    background-color: var(--white-main);
-    box-shadow: 0 0 0 0.5px var(--black-main),
-        0 0 0 1.5px var(--white-main);
+    padding: 16px;
+    background: var(--pc98-white);
+    box-shadow: none;
+    border: solid 1px var(--pc98-border-dark);
+    font-size: 14px;
+    line-height: 1.8;
 }
 
 .rm-link {
     position: relative;
-    width: 120px;
-    height: 30px;
+    width: 110px;
+    height: 28px;
     display: flex;
     align-self: flex-end;
     margin-top: auto;
     align-items: center;
     justify-content: center;
-    border-radius: 15px;
-    margin-bottom: -15px;
+    border-radius: 0;
+    margin-bottom: 0;
     text-decoration: none;
-    color: var(--black-main);
-    text-shadow: 0 1px 0 var(--white-main);
-    transition: all 0.2s;
-    overflow: hidden;
+    color: var(--pc98-text);
+    text-shadow: none;
+    transition: none;
+    overflow: visible;
+    font-family: var(--font-ui);
+    font-size: 12px;
 }
 
 .rm-link::after {
@@ -100,15 +108,18 @@
 
 .rm-link:active {
     top: 1px;
+    left: 1px;
 }
 
 .read-more {
     position: relative;
-    z-index: 2;
+    z-index: 1;
 }
 
 .article-title {
     display: block;
-    padding: 20px 0;
-    font-size: 30px;
+    padding: 12px 0 4px 0;
+    font-size: 22px;
+    font-family: var(--font-ui);
+    color: var(--pc98-blue);
 }

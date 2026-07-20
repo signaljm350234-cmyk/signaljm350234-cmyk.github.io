@@ -1,18 +1,38 @@
+/* PC-98 Footer — Taskbar tray area */
+
 footer {
-    border-radius: 15px 15px 0 0;
+    border-radius: 0;
     margin-bottom: 0;
-    height: 80px;
-    display: flex;
+    margin-top: 0;
+    height: auto;
+    display: block;
+    padding: 6px 12px;
+    background: var(--pc98-window-bg);
+    border-top: solid 1px var(--pc98-border-light);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--pc98-text);
 }
 
 .copyright {
     width: 100%;
     align-items: center;
     text-align: center;
-    text-shadow: 0 0 10px var(--white-main),
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main);
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    text-shadow: none;
+}
+
+.copyright p {
+    margin: 0;
+}
+
+footer a {
+    color: var(--pc98-blue);
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
 }

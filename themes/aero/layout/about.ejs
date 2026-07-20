@@ -1,9 +1,18 @@
-<div class="card post-full">
-    <span class="post-title article-title">
-        <%= page.title %>
-    </span>
-
-    <div class="post-content">
-        <%- page.content %>
+<!-- PC-98 Window: About -->
+<div class="card pc98-window">
+    <div class="pc98-titlebar">
+        <span class="title-text"><%= page.title %></span>
+        <span>_ &#9744; &#10005;</span>
+    </div>
+    <div class="pc98-menubar">
+        <span class="menu-item"><span class="underline">F</span>ile</span>
+        <span class="menu-item"><span class="underline">E</span>dit</span>
+        <span class="menu-item"><span class="underline">V</span>iew</span>
+        <span class="menu-item"><span class="underline">H</span>elp</span>
+    </div>
+    <div class="pc98-window-body" style="padding:16px;">
+        <div class="post-content">
+            <%- page.content %>
+        </div>
     </div>
 </div>

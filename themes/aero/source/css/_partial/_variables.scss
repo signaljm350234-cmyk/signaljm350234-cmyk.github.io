@@ -1,17 +1,33 @@
 :root {
-    --black-main: #000000;
-    --white-main: #f2f6f8;
-    /* You can customize the theme color here */
-    --primary-color: #3c7fb1;
-    --highlight-color: #aaddfa;
-    --secondary-color: #d8e1e7;
+    /* PC-98 color scheme */
+    --pc98-blue:      #2849a2;
+    --pc98-blue-dark: #1a3068;
+    --pc98-window-bg: #f7f2e7;
+    --pc98-titlebar:  #899f66;
+    --pc98-titlebar-dark: #6b7f4e;
+    --pc98-menu-bg:   #f7f2e7;
+    --pc98-terminal:  #000000;
+    --pc98-text:       #222222;
+    --pc98-white:      #f9f9f9;
+    --pc98-accent:     #e8c367;
+    --pc98-accent-alt: #e7a37a;
+    --pc98-accent-red: #d87c7b;
+    --pc98-border-light: #606060;
+    --pc98-border-dark:  #101010;
+    --pc98-shadow:      rgba(0, 0, 0, 0.5);
+    --pc98-highlight:   #4a6cd4;
 
-    --aero-grad: linear-gradient(to bottom, 
-    color-mix(in srgb, var(--secondary-color), white 60%) 0%, 
-    var(--secondary-color) 50%, 
-    color-mix(in srgb, var(--secondary-color), black 10%) 51%, 
-    var(--secondary-color) 100%);
+    /* Typography */
+    --font-ui:    "Roboto", "Segoe UI", sans-serif;
+    --font-body:  "Noto Sans SC", "Noto Sans JP", "Microsoft YaHei", sans-serif;
+    --font-mono:  "Consolas", "MS Gothic", monospace;
 
-    /* You can customize the background image here */
-    --bg-image: url(/image/bg.jpg);
+    /* Legacy compat for existing templates — map to new vars */
+    --black-main:    #000000;
+    --white-main:    #f7f2e7;
+    --primary-color: #2849a2;
+    --highlight-color: #4a6cd4;
+    --secondary-color: #d0d8e0;
+    --aero-grad: linear-gradient(to bottom, #d0d8e0 0%, #b0b8c0 100%);
+    --bg-image: none;
 }

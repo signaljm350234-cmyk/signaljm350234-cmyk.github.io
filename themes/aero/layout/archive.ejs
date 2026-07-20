@@ -1,34 +1,49 @@
-<section class="archive-container">
-    <% var lastYear; %>
-    <% page.posts.each(function(post, index) { %>
-        <% var currentYear=post.date.year(); %>
-        <% if (lastYear !==currentYear) { %>
-            <% if (lastYear !==undefined) { %>
-                    </div>
-                </div>
-            <% } %>
-                <% lastYear=currentYear; %>
+<!-- PC-98 Window: Archives -->
+<div class="card pc98-window">
+    <div class="pc98-titlebar">
+        <span class="title-text">Archives</span>
+        <span>_ &#9744; &#10005;</span>
+    </div>
+    <div class="pc98-menubar">
+        <span class="menu-item"><span class="underline">F</span>ile</span>
+        <span class="menu-item"><span class="underline">E</span>dit</span>
+        <span class="menu-item"><span class="underline">V</span>iew</span>
+        <span class="menu-item"><span class="underline">H</span>elp</span>
+    </div>
+    <div class="pc98-window-body" style="padding:8px;">
+        <section class="archive-container">
+            <% var lastYear; %>
+            <% page.posts.each(function(post, index) { %>
+                <% var currentYear=post.date.year(); %>
+                <% if (lastYear !==currentYear) { %>
+                    <% if (lastYear !==undefined) { %>
+                            </div>
+                        </div>
+                    <% } %>
+                    <% lastYear=currentYear; %>
                     <div class="card year-group">
                         <div class="year-header">
                             <%= currentYear %>
                         </div>
                         <div class="archive-list">
-        <% } %>
-        <div class="archive-item">
-            <span class="archive-date">
-                <%= date(post.date, "MM-DD" ) %>
-            </span>
-            <a class="archive-title" href="<%- url_for(post.path) %>">
-                <%= post.title || 'Untitled' %>
-            </a>
-        </div>
-    <% }) %>
-    <% if (page.posts.length> 0) { %>
-            </div>
-        </div>
-    <% } %>
-</section>
+                <% } %>
+                <div class="archive-item">
+                    <span class="archive-date">
+                        <%= date(post.date, "MM-DD" ) %>
+                    </span>
+                    <a class="archive-title" href="<%- url_for(post.path) %>">
+                        <%= post.title || 'Untitled' %>
+                    </a>
+                </div>
+            <% }) %>
+            <% if (page.posts.length> 0) { %>
+                    </div>
+                </div>
+            <% } %>
+        </section>
 
-<nav class="page-nav">
-    <%- paginator({ prev_text: '<' , next_text: '>' }) %>
-</nav>
+        <nav class="page-nav">
+            <%- paginator({ prev_text: '<' , next_text: '>' }) %>
+        </nav>
+    </div>
+</div>

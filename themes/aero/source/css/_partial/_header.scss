@@ -1,88 +1,119 @@
+/* PC-98 Header — desktop title bar window */
+
 .header {
-    position: sticky;
-    top: 0;
-    z-index: 3;
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    min-width: 200px;
+    background: var(--pc98-window-bg);
+    border-top:    solid 1px var(--pc98-border-light);
+    border-left:   solid 1px var(--pc98-border-light);
+    border-bottom: solid 1px var(--pc98-border-dark);
+    border-right:  solid 1px var(--pc98-border-dark);
+    box-shadow: 4px 4px 1px var(--pc98-shadow);
 }
 
 header {
-    width: 100%;
-    height: 80px;
-    padding-right: 60px;
-    border-radius: 0 0 0 15px;
-    overflow: hidden;
+    width: auto;
+    height: auto;
+    padding: 3px 8px;
+    border-radius: 0;
     position: relative;
-    top: 0;
+    top: auto;
+    background: var(--pc98-titlebar);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--pc98-white);
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
 }
-
 
 .blog-title {
     position: relative;
-    text-align: right;
-    /* font-style: italic; */
-    font-size: 20px;
-    text-shadow: 0 0 10px var(--white-main),
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main), 
-        0 0 10px var(--white-main);
+    text-align: left;
+    font-size: 12px;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+    color: var(--pc98-white);
 }
 
+/* nav becomes desktop icons */
 nav {
     position: relative;
     border-top: none;
-    border-radius: 15px;
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 30px;
-    margin-left: 360px;
-    top: -15px;
-    left: 12px;
+    border-radius: 0;
+    padding: 0;
+    display: block;
+    height: auto;
+    margin-left: 0;
+    top: auto;
+    left: auto;
+    background: var(--pc98-window-bg);
 }
 
 .nav-links {
     list-style: none;
     padding: 0;
-    display: flex;
+    margin: 0;
+    display: block;
     box-sizing: border-box;
-    height: 100%;
+    height: auto;
 }
 
 .nav-links li {
-    display: flex;
+    display: block;
     box-sizing: border-box;
-    height: 100%;
+    height: auto;
+    border-bottom: solid 1px var(--pc98-border-dark);
+}
+
+.nav-links li:last-child {
+    border-bottom: none;
 }
 
 .nav-links li a {
     position: relative;
     box-sizing: border-box;
-    height: 100%;
-    gap: 8px;
-    font-size: 14px;
-    line-height: 12px;
+    height: auto;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
     text-decoration: none;
-    padding: 0 20px;
-    color: var(--black-main);
-    box-shadow: inset 0 0 0 1px var(--white-main);
-    border-right: 1px solid var(--black-main);
-    text-shadow: 0 1px 0 var(--white-main);
+    padding: 6px 12px;
+    color: var(--pc98-text);
+    box-shadow: none;
+    border: none;
+    text-shadow: none;
+    display: flex;
+    align-items: center;
+    font-family: var(--font-ui);
+}
+
+.nav-links li a:hover {
+    background: var(--pc98-highlight);
+    color: var(--pc98-white);
+}
+
+.nav-links li a.active {
+    background: var(--pc98-titlebar);
+    color: var(--pc98-white);
 }
 
 .nav-text {
     position: relative;
-    z-index: 2;
-    height: 100%;
+    z-index: 1;
+    height: auto;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
 }
+
 .icon {
-    width: 24px;
+    width: 18px;
+    height: 18px;
+    image-rendering: pixelated;
 }
 
 .link-home {
-    border-left: 1px solid #333;
+    border-left: none;
 }

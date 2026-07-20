@@ -18,43 +18,153 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-light.min.css">
 </head>
 
-<body>
+<body class="has-taskbar">
     <div class="container">
-        <!-- header -->
-        <%- partial('_partial/header') %>
+        <!-- Desktop Icons -->
+        <div class="desktop-icons">
+            <a href="/" class="desktop-icon">
+                <img src="/image/icon/vista_messenger.jpg" alt="home">
+                <span class="icon-label">我的首页</span>
+            </a>
+            <a href="/archives" class="desktop-icon">
+                <img src="/image/icon/vista_book_1.jpg" alt="archives">
+                <span class="icon-label">时间轴</span>
+            </a>
+            <a href="/categories/thoughts" class="desktop-icon">
+                <img src="/image/icon/vista_messenger.jpg" alt="thoughts">
+                <span class="icon-label">想法</span>
+            </a>
+            <a href="/categories/learning" class="desktop-icon">
+                <img src="/image/icon/vista_book_1.jpg" alt="learning">
+                <span class="icon-label">学习</span>
+            </a>
+            <a href="/spending" class="desktop-icon">
+                <img src="/image/icon/vista_photo_gallery.jpg" alt="spending">
+                <span class="icon-label">消费</span>
+            </a>
+            <a href="/about" class="desktop-icon">
+                <img src="/image/icon/vista_pc_1.jpg" alt="about">
+                <span class="icon-label">关于</span>
+            </a>
+        </div>
+
+        <!-- Title Window -->
+        <div class="header draggable-element" id="pjax-header">
+            <header>
+                <p class="blog-title">
+                    <%= config.title %>
+                </p>
+            </header>
+            <nav>
+                <ul class="nav-links">
+                    <li>
+                        <a href="/" class="<%= is_home() ? 'active' : '' %>">
+                            <span class="nav-text">
+                                <img src="/image/icon/vista_messenger.jpg" alt="home" class="icon">
+                                <span>Home</span>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/categories/thoughts">
+                            <span class="nav-text">
+                                <img src="/image/icon/vista_messenger.jpg" alt="thoughts" class="icon">想法
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/categories/learning">
+                            <span class="nav-text">
+                                <img src="/image/icon/vista_book_1.jpg" alt="learning" class="icon">学习
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/spending">
+                            <span class="nav-text">
+                                <img src="/image/icon/vista_photo_gallery.jpg" alt="spending" class="icon">消费
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/archives">
+                            <span class="nav-text">
+                                <img src="/image/icon/vista_book_1.jpg" alt="posts" class="icon">时间轴
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/about">
+                            <span class="nav-text">
+                                <img src="/image/icon/vista_pc_1.jpg" alt="about" class="icon">关于
+                            </span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
 
         <div class="button mobile-menu-btn" id="mobile-menu-btn">
             <span class="menu-icon ri-menu-fill"></span>
         </div>
 
-            <div class="main-layout">
-                <aside id="sidebar">
-                    <%- partial('_partial/widget') %>
-                </aside>
-                <main id="pjax-container">
-                    <%- body %>
-                </main>
-                <div class="sidebar-mask" id="sidebar-mask"></div>
-            </div>
-            <!-- footer -->
-            <%- partial('_partial/footer') %>
+        <div class="main-layout">
+            <aside id="sidebar">
+                <%- partial('_partial/widget') %>
+            </aside>
+            <main id="pjax-container">
+                <%- body %>
+            </main>
+            <div class="sidebar-mask" id="sidebar-mask"></div>
+        </div>
+
+        <!-- footer — only visible on non-home pages -->
+        <%- partial('_partial/footer') %>
+    </div>
+
+    <!-- Taskbar -->
+    <div class="taskbar">
+        <a href="/" class="taskbar-item <%= is_home() ? 'active' : '' %>">
+            <img src="/image/icon/vista_messenger.jpg" alt="home"> Home
+        </a>
+        <a href="/categories/thoughts" class="taskbar-item">
+            <img src="/image/icon/vista_messenger.jpg" alt="thoughts"> 想法
+        </a>
+        <a href="/categories/learning" class="taskbar-item">
+            <img src="/image/icon/vista_book_1.jpg" alt="learning"> 学习
+        </a>
+        <a href="/spending" class="taskbar-item">
+            <img src="/image/icon/vista_photo_gallery.jpg" alt="spending"> 消费
+        </a>
+        <a href="/archives" class="taskbar-item <%= is_archive() || is_current('archives') ? 'active' : '' %>">
+            <img src="/image/icon/vista_book_1.jpg" alt="archives"> 时间轴
+        </a>
+        <a href="/about" class="taskbar-item <%= is_current('about') ? 'active' : '' %>">
+            <img src="/image/icon/vista_pc_1.jpg" alt="about"> 关于
+        </a>
+
+        <div class="taskbar-tray">
+            <span class="clock" id="taskbar-clock">--:--</span>
+        </div>
     </div>
 
     <script src="/js/responsive.js"></script>
     <script src="/js/music.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pjax/pjax.min.js"></script>
+    <script src="/js/desktop.js"></script>
+    <script src="/js/image-viewer.js"></script>
+
+    <!-- Taskbar clock -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            new Pjax({
-                elements: 'a[href]:not([target]):not([data-no-pjax])',
-                selectors: [
-                    'title',
-                    '#pjax-container',
-                    '#pjax-header'
-                ]
-            })
-        })
+        (function updateClock() {
+            var now = new Date();
+            var h = now.getHours().toString().padStart(2, '0');
+            var m = now.getMinutes().toString().padStart(2, '0');
+            var el = document.getElementById('taskbar-clock');
+            if (el) el.textContent = h + ':' + m;
+            setTimeout(updateClock, 30000);
+        })();
     </script>
+
     <% if (theme.math.enable && page.mathjax) { %>
         <script>
             window.MathJax = {
@@ -64,7 +174,7 @@
                     processEscapes: true
                 },
                 options: {
-                    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] // 忽略的代码块
+                    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
                 }
             };
         </script>
