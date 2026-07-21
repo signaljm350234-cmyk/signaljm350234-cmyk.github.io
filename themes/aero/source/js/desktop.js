@@ -2,6 +2,27 @@
 
 document.addEventListener('DOMContentLoaded', function() {
 
+    /* ===== Prevent page scrolling (desktop only) ===== */
+    var isDesktop = function() { return window.innerWidth > 768; };
+
+    document.addEventListener('wheel', function(e) {
+        if (!isDesktop()) return;
+        var target = e.target;
+        var isInsideWindowBody = target.closest('.pc98-window-body') || target.closest('.post-content') || target.closest('.archive-container') || target.closest('#imageviewer');
+        if (!isInsideWindowBody) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!isDesktop()) return;
+        var target = e.target;
+        var isInsideWindowBody = target.closest('.pc98-window-body') || target.closest('.post-content') || target.closest('.archive-container') || target.closest('#imageviewer');
+        if (!isInsideWindowBody) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
     /* ===== Window Dragging ===== */
     var highestZ = 100;
 
@@ -35,20 +56,16 @@ document.addEventListener('DOMContentLoaded', function() {
             startMouseX = e.clientX;
             startMouseY = e.clientY;
 
-            // Get current position of the element
+            // Get current viewport position
             var rect = el.getBoundingClientRect();
             startLeft = rect.left;
             startTop = rect.top;
 
-            // Ensure element is using fixed positioning for viewport-relative drag
-            var cs = window.getComputedStyle(el);
-            if (cs.position === 'absolute' || cs.position === 'relative' || cs.position === 'static') {
-                el.style.position = 'fixed';
-                el.style.left = rect.left + 'px';
-                el.style.top = rect.top + 'px';
-                el.style.right = 'auto';
-                el.style.bottom = 'auto';
-            }
+            // Ensure window uses the saved coordinates (already position:fixed via CSS)
+            el.style.left = startLeft + 'px';
+            el.style.top = startTop + 'px';
+            el.style.right = 'auto';
+            el.style.bottom = 'auto';
         });
     });
 

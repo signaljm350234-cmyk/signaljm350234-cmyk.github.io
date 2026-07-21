@@ -104,16 +104,23 @@ body {
 
 /* ===== Layout ===== */
 .main-layout {
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100vh;
     box-sizing: border-box;
     overflow: hidden;
+    pointer-events: none;  /* let clicks pass through to desktop windows */
 }
 
-/* All desktop windows are absolutely positioned and draggable */
+.main-layout > * {
+    pointer-events: auto;
+}
+
+/* All desktop windows are fixed — immune to scroll, rooted to viewport */
 .desktop-window {
-    position: absolute;
+    position: fixed;
     min-width: 250px;
     cursor: grab;
     user-select: none;
@@ -122,19 +129,31 @@ body {
     cursor: grabbing;
 }
 
-/* Sidebar widgets as independent desktop windows */
+/* Sidebar wrapper — just a pass-through container */
 #sidebar {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
-    width: auto;
-    height: auto;
-    transform: none;
-    transition: none;
-    background: none;
-    box-shadow: none;
-    padding: 0;
+    width: 0;
+    height: 0;
     overflow: visible;
+    pointer-events: none;
+}
+#sidebar > * {
+    pointer-events: auto;
+}
+
+#pjax-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    pointer-events: none;
+}
+#pjax-container > * {
+    pointer-events: auto;
 }
 
 .mobile-menu-btn,
