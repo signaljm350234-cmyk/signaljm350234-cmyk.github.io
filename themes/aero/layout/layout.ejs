@@ -4,9 +4,66 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>
-        <%= config.title %>
-    </title>
+    <title><%= config.title %></title>
+
+    <!-- Intro sequence styles -->
+    <style>
+      /* === Camera rig: 3D perspective wrapper for the iframe === */
+      .camera-rig {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        z-index: 0;
+        pointer-events: none;
+        perspective: 1200px;
+        perspective-origin: 50% 50%;
+      }
+      .camera-rig .bg-frame {
+        width: 100%; height: 100%;
+        transform-origin: 50% 80%;
+        animation: cameraRise 3s cubic-bezier(0.15, 0.0, 0.0, 1.0) forwards;
+      }
+      .camera-rig .bg-frame iframe {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        border: none;
+        pointer-events: none;
+      }
+      @keyframes cameraRise {
+        0%   { transform: rotateX(25deg) scale(1.6); }
+        100% { transform: rotateX(0deg)  scale(1.0); }
+      }
+
+      /* === Intro reveal: all desktop chrome hidden during camera move === */
+      .intro-item {
+        opacity: 0;
+      }
+      .intro-item.revealed {
+        animation: blinkIn 0.35s ease-out forwards;
+      }
+
+      @keyframes blinkIn {
+        0%   { opacity: 0;   filter: brightness(3); }
+        35%  { opacity: 0.9; filter: brightness(1.8); }
+        70%  { opacity: 0.4; filter: brightness(1.0); }
+        100% { opacity: 1;   filter: brightness(1.0); }
+      }
+
+      /* Taskbar slides up */
+      .taskbar.intro-item {
+        opacity: 0;
+        transform: translateY(100%);
+      }
+      .taskbar.intro-item.revealed {
+        animation: taskbarIn 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+      }
+      @keyframes taskbarIn {
+        0%   { opacity: 0;   transform: translateY(100%); }
+        100% { opacity: 1;   transform: translateY(0);    }
+      }
+    </style>
+
     <%- css('css/style.css') %>
     <% if (theme.favicon.enable) { %>
         <% if (theme.favicon.icon) { %>
@@ -14,52 +71,31 @@
         <% } %>
     <% } %>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.9.1/fonts/remixicon.css">
-    <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-light.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-light.min.css">
 </head>
 
 <body class="has-taskbar">
-    <!-- Galaxy black hole background: fullscreen iframe with its own HTML/CSS/JS -->
-    <iframe src="/galaxy-bg/" allow="autoplay"
-        style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;border:none;pointer-events:none;"
-        title="background"></iframe>
+    <!-- Camera rig: 3D perspective animation wrapping the galaxy iframe -->
+    <div class="camera-rig">
+        <div class="bg-frame">
+            <iframe src="/galaxy-bg/" allow="autoplay" title="background"></iframe>
+        </div>
+    </div>
 
     <div class="container">
         <!-- Desktop Icons -->
-        <div class="desktop-icons">
-            <a href="/" class="desktop-icon">
-                <img src="/image/icon/vista_messenger.jpg" alt="home">
-                <span class="icon-label">我的首页</span>
-            </a>
-            <a href="/archives" class="desktop-icon">
-                <img src="/image/icon/vista_book_1.jpg" alt="archives">
-                <span class="icon-label">时间轴</span>
-            </a>
-            <a href="/categories/thoughts" class="desktop-icon">
-                <img src="/image/icon/vista_messenger.jpg" alt="thoughts">
-                <span class="icon-label">想法</span>
-            </a>
-            <a href="/categories/learning" class="desktop-icon">
-                <img src="/image/icon/vista_book_1.jpg" alt="learning">
-                <span class="icon-label">学习</span>
-            </a>
-            <a href="/spending" class="desktop-icon">
-                <img src="/image/icon/vista_photo_gallery.jpg" alt="spending">
-                <span class="icon-label">消费</span>
-            </a>
-            <a href="/about" class="desktop-icon">
-                <img src="/image/icon/vista_pc_1.jpg" alt="about">
-                <span class="icon-label">关于</span>
-            </a>
+        <div class="desktop-icons intro-item" data-delay="3200">
+            <a href="/" class="desktop-icon"><img src="/image/icon/vista_messenger.jpg" alt="home"><span class="icon-label">我的首页</span></a>
+            <a href="/archives" class="desktop-icon"><img src="/image/icon/vista_book_1.jpg" alt="archives"><span class="icon-label">时间轴</span></a>
+            <a href="/categories/thoughts" class="desktop-icon"><img src="/image/icon/vista_messenger.jpg" alt="thoughts"><span class="icon-label">想法</span></a>
+            <a href="/categories/learning" class="desktop-icon"><img src="/image/icon/vista_book_1.jpg" alt="learning"><span class="icon-label">学习</span></a>
+            <a href="/spending" class="desktop-icon"><img src="/image/icon/vista_photo_gallery.jpg" alt="spending"><span class="icon-label">消费</span></a>
+            <a href="/about" class="desktop-icon"><img src="/image/icon/vista_pc_1.jpg" alt="about"><span class="icon-label">关于</span></a>
         </div>
 
         <!-- Title Window -->
-        <div class="header draggable-element" id="pjax-header">
-            <header>
-                <p class="blog-title">
-                    <%= config.title %>
-                </p>
-            </header>
+        <div class="header draggable-element intro-item" id="pjax-header" data-delay="3050">
+            <header><p class="blog-title"><%= config.title %></p></header>
             <nav>
                 <ul class="nav-links">
                     <li><a href="/" class="<%= is_home() ? 'active' : '' %>"><span class="nav-text"><img src="/image/icon/vista_messenger.jpg" alt="home" class="icon"><span>Home</span></span></a></li>
@@ -72,11 +108,11 @@
             </nav>
         </div>
 
-        <div class="button mobile-menu-btn" id="mobile-menu-btn">
+        <div class="button mobile-menu-btn intro-item" id="mobile-menu-btn" data-delay="3350">
             <span class="menu-icon ri-menu-fill"></span>
         </div>
 
-        <div class="main-layout">
+        <div class="main-layout intro-item" data-delay="3200">
             <aside id="sidebar">
                 <%- partial('_partial/widget') %>
             </aside>
@@ -88,7 +124,7 @@
     </div>
 
     <!-- Taskbar -->
-    <div class="taskbar">
+    <div class="taskbar intro-item" data-delay="3500">
         <a href="/" class="taskbar-item <%= is_home() ? 'active' : '' %>"><img src="/image/icon/vista_messenger.jpg" alt="home"> Home</a>
         <a href="/categories/thoughts" class="taskbar-item"><img src="/image/icon/vista_messenger.jpg" alt="thoughts"> 想法</a>
         <a href="/categories/learning" class="taskbar-item"><img src="/image/icon/vista_book_1.jpg" alt="learning"> 学习</a>
@@ -96,7 +132,7 @@
         <a href="/archives" class="taskbar-item <%= is_archive() || is_current('archives') ? 'active' : '' %>"><img src="/image/icon/vista_book_1.jpg" alt="archives"> 时间轴</a>
         <a href="/about" class="taskbar-item <%= is_current('about') ? 'active' : '' %>"><img src="/image/icon/vista_pc_1.jpg" alt="about"> 关于</a>
         <div class="taskbar-tray">
-            <span style="margin-right:12px;font-size:11px;color:#666;">© <%= date(new Date(), 'YYYY') %> <%= config.author %></span>
+            <span style="margin-right:12px;font-size:11px;color:#666;">&copy; <%= date(new Date(), 'YYYY') %> <%= config.author %></span>
             <span class="clock" id="taskbar-clock">--:--</span>
         </div>
     </div>
@@ -106,15 +142,27 @@
     <script src="/js/desktop.js"></script>
     <script src="/js/image-viewer.js"></script>
 
+    <!-- Intro sequence controller -->
     <script>
-        (function updateClock() {
-            var now = new Date();
-            var h = now.getHours().toString().padStart(2, '0');
-            var m = now.getMinutes().toString().padStart(2, '0');
-            var el = document.getElementById('taskbar-clock');
-            if (el) el.textContent = h + ':' + m;
-            setTimeout(updateClock, 30000);
-        })();
+(function() {
+  var items = document.querySelectorAll('.intro-item');
+  // Sort by data-delay, reveal each at its scheduled time
+  items.forEach(function(el) {
+    var delay = parseInt(el.getAttribute('data-delay')) || 3000;
+    setTimeout(function() {
+      el.classList.add('revealed');
+    }, delay);
+  });
+  // Taskbar clock
+  (function updateClock() {
+    var now = new Date();
+    var h = now.getHours().toString().padStart(2, '0');
+    var m = now.getMinutes().toString().padStart(2, '0');
+    var el = document.getElementById('taskbar-clock');
+    if (el) el.textContent = h + ':' + m;
+    setTimeout(updateClock, 30000);
+  })();
+})();
     </script>
 
     <% if (theme.math.enable && page.mathjax) { %>
