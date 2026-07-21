@@ -113,15 +113,15 @@
         var c = gridCtx;
         c.clearRect(0, 0, IR_W, IR_H);
 
-        var gridSpacing = IR_W * 0.04;
-        var gridW = IR_W * 1.6;
-        var gridH = IR_H * 1.2;
-        var startX = -gridW * 0.3;
-        var startY = cy + bhR * 0.8;
-        var strength = bhR * 2.8;
+        var gridSpacing = IR_W * 0.035;
+        var gridW = IR_W * 1.8;
+        var gridH = IR_H * 1.4;
+        var startX = -gridW * 0.35;
+        var startY = cy - bhR * 1.2;
+        var strength = bhR * 3.0;
 
-        c.strokeStyle = 'rgba(200,210,230,0.18)';
-        c.lineWidth = 0.6;
+        c.strokeStyle = 'rgba(200,210,230,0.16)';
+        c.lineWidth = 0.5;
 
         // Horizontal lines (curved downward near black hole)
         for (var gy = -gridH * 0.2; gy < gridH; gy += gridSpacing) {
