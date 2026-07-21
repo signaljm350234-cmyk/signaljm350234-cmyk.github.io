@@ -5,65 +5,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title><%= config.title %></title>
-
-    <!-- Intro sequence styles -->
-    <style>
-      /* === Camera rig: 3D perspective wrapper for the iframe === */
-      .camera-rig {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100vw; height: 100vh;
-        z-index: 0;
-        pointer-events: none;
-        perspective: 1200px;
-        perspective-origin: 50% 50%;
-      }
-      .camera-rig .bg-frame {
-        width: 100%; height: 100%;
-        transform-origin: 50% 80%;
-        animation: cameraRise 3s cubic-bezier(0.15, 0.0, 0.0, 1.0) forwards;
-      }
-      .camera-rig .bg-frame iframe {
-        position: absolute;
-        top: 0; left: 0;
-        width: 100vw; height: 100vh;
-        border: none;
-        pointer-events: none;
-      }
-      @keyframes cameraRise {
-        0%   { transform: rotateX(25deg) scale(1.6); }
-        100% { transform: rotateX(0deg)  scale(1.0); }
-      }
-
-      /* === Intro reveal: all desktop chrome hidden during camera move === */
-      .intro-item {
-        opacity: 0;
-      }
-      .intro-item.revealed {
-        animation: blinkIn 0.35s ease-out forwards;
-      }
-
-      @keyframes blinkIn {
-        0%   { opacity: 0;   filter: brightness(3); }
-        35%  { opacity: 0.9; filter: brightness(1.8); }
-        70%  { opacity: 0.4; filter: brightness(1.0); }
-        100% { opacity: 1;   filter: brightness(1.0); }
-      }
-
-      /* Taskbar slides up */
-      .taskbar.intro-item {
-        opacity: 0;
-        transform: translateY(100%);
-      }
-      .taskbar.intro-item.revealed {
-        animation: taskbarIn 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
-      }
-      @keyframes taskbarIn {
-        0%   { opacity: 0;   transform: translateY(100%); }
-        100% { opacity: 1;   transform: translateY(0);    }
-      }
-    </style>
-
     <%- css('css/style.css') %>
     <% if (theme.favicon.enable) { %>
         <% if (theme.favicon.icon) { %>
@@ -72,6 +13,75 @@
     <% } %>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.9.1/fonts/remixicon.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-light.min.css">
+
+    <!-- Intro sequence styles (after main CSS so they win priority) -->
+    <style>
+      .camera-rig {
+        position: fixed; top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        z-index: 0; pointer-events: none;
+        overflow: hidden;
+      }
+      .camera-rig .bg-frame {
+        width: 100%; height: 100%;
+        animation: cameraZoom 3s cubic-bezier(0.12, 0.0, 0.1, 1.0) forwards;
+      }
+      .camera-rig .bg-frame iframe {
+        position: absolute; top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        border: none; pointer-events: none;
+      }
+      @keyframes cameraZoom {
+        0%   { transform: scale(2.5); filter: blur(12px) brightness(0.3); }
+        30%  { filter: blur(8px) brightness(0.5); }
+        60%  { filter: blur(3px) brightness(0.8); }
+        100% { transform: scale(1.0); filter: blur(0px) brightness(1.0); }
+      }
+
+      /* Overlay flash at the end of camera move */
+      .camera-flash {
+        position: fixed; top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        z-index: 1; pointer-events: none;
+        background: white;
+        opacity: 0;
+        animation: flashWhite 0.4s ease-out 2.8s forwards;
+      }
+      @keyframes flashWhite {
+        0%   { opacity: 0; }
+        50%  { opacity: 0.6; }
+        100% { opacity: 0; }
+      }
+
+      .intro-item { opacity: 0; }
+      .intro-item.revealed {
+        animation: blinkIn 0.4s ease-out forwards;
+      }
+      @keyframes blinkIn {
+        0%   { opacity: 0;   filter: brightness(3) blur(2px); }
+        30%  { opacity: 0.7; filter: brightness(1.5) blur(0px); }
+        55%  { opacity: 0.3; filter: brightness(0.8); }
+        100% { opacity: 1;   filter: brightness(1); }
+      }
+
+      .taskbar.intro-item {
+        opacity: 0;
+        transform: translateY(100%);
+      }
+      .taskbar.intro-item.revealed {
+        animation: taskbarIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+      }
+      @keyframes taskbarIn {
+        0%   { opacity: 0;   transform: translateY(100%); }
+        100% { opacity: 1;   transform: translateY(0);    }
+      }
+
+      /* Skip intro if cookie set (returning visitor) */
+      .no-intro .intro-item { opacity: 1; }
+      .no-intro .taskbar.intro-item { opacity: 1; transform: none; }
+      .no-intro .camera-rig .bg-frame { animation: none; transform: scale(1); filter: none; }
+      .no-intro .camera-flash { display: none; }
+    </style>
 </head>
 
 <body class="has-taskbar">
@@ -81,6 +91,7 @@
             <iframe src="/galaxy-bg/" allow="autoplay" title="background"></iframe>
         </div>
     </div>
+    <div class="camera-flash"></div>
 
     <div class="container">
         <!-- Desktop Icons -->
@@ -145,14 +156,33 @@
     <!-- Intro sequence controller -->
     <script>
 (function() {
+  // Check cookie: skip intro for returning visitors within 10 minutes
+  var skipIntro = document.cookie.indexOf('intro_done=1') !== -1;
+  if (skipIntro) {
+    document.body.classList.add('no-intro');
+    document.body.classList.remove('has-taskbar');
+  }
+
   var items = document.querySelectorAll('.intro-item');
-  // Sort by data-delay, reveal each at its scheduled time
   items.forEach(function(el) {
     var delay = parseInt(el.getAttribute('data-delay')) || 3000;
-    setTimeout(function() {
+    // If skipping intro, reveal immediately
+    if (skipIntro) {
       el.classList.add('revealed');
-    }, delay);
+    } else {
+      setTimeout(function() {
+        el.classList.add('revealed');
+      }, delay);
+    }
   });
+
+  // Set cookie so next visit within 10 min skips intro
+  if (!skipIntro) {
+    var d = new Date();
+    d.setTime(d.getTime() + 10 * 60 * 1000);
+    document.cookie = 'intro_done=1; expires=' + d.toUTCString() + '; path=/';
+  }
+
   // Taskbar clock
   (function updateClock() {
     var now = new Date();
