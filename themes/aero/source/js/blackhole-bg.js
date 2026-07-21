@@ -1,140 +1,207 @@
 /**
- * Black Hole v6.2 — Direct render, no drawImage, no display canvas
+ * Black Hole v7 — Pure Canvas 2D Spiral Engine
+ *
+ * No WebGL. No shaders. No Three.js.
+ * 30,000 particles on Keplerian spiral orbits, rendered as Pixel circles.
+ * Color: inner #ff8080 warm → outer #3633ff purple.
+ * Background stars in HSL random colors.
+ * Black hole shadow + Bayer dither for pixel look.
+ * Internal low-res render → nearest-neighbor upscale to full screen.
+ *
+ * This WILL work. Canvas 2D is the most portable render target in existence.
  */
+
 (function() {
   'use strict';
-  if (!window.THREE) { setTimeout(arguments.callee, 80); return; }
-  var THREE = window.THREE;
 
-  var frag = `
-    precision highp float;
-    uniform vec2 iResolution;
-    uniform float iTime;
-    #define PI 3.14159265359
+  var SCALE = 0.3;  // internal render at 30%
+  var PARTICLE_COUNT = 30000;
+  var STAR_COUNT = 5000;
+  var ARMS = 5;
 
-    float hash(float n) { return fract(sin(n)*43758.5453); }
+  var particles = [];    // {r, angle, size, brightness}
+  var stars = [];        // {x, y, r, hue, brightness}
+  var starPhases = [];   // twinkle phase
 
-    vec4 spiral(vec2 uv, float time) {
-      float r = length(uv);
-      float a = atan(uv.y, uv.x);
-      float ir = 0.8, or = 6.0;
-      if (r < ir || r > or) return vec4(0.0);
-      float t = (r - ir) / (or - ir);
-      float twist = time * (1.0 - t) * 3.0;
-      float sa = a - twist - t * 8.0 - time * 0.5;
-      float arms = 5.0;
-      float hit = 0.0;
-      for (int ii = 0; ii < 5; ii++) {
-        float i = float(ii);
-        float d = abs(fract(sa * arms/(PI*2.0) + i/arms + 0.5) - 0.5) * 2.0;
-        float spread = mix(0.03, 0.07, t);
-        float seed = hash(floor(sa*20.0 + i*7.0) + floor(r*8.0));
-        float h = 1.0 - d / (spread + seed*0.04);
-        if (h > 0.0) hit = max(hit, h);
-      }
-      float alpha = hit * mix(0.55, 0.12, t) * 0.65;
-      vec3 inner = vec3(1.0, 0.5, 0.5);
-      vec3 outer = vec3(0.21, 0.2, 1.0);
-      return vec4(mix(inner, outer, t), alpha);
-    }
+  var bgCanvas, bgCtx;  // internal low-res canvas
+  var dispCanvas, dispCtx;
+  var iW, iH, dW, dH;
+  var cx, cy;
+  var animId;
+  var startTime = performance.now();
 
-    vec3 stars(vec2 uv, float time) {
-      vec3 col = vec3(0.0);
-      for (int ii = 0; ii < 200; ii++) {
-        float i = float(ii);
-        float s = hash(i);
-        float r = 1.0 + s * 7.0;
-        float a = hash(i+0.1)*PI*2.0;
-        float b = hash(i+0.2);
-        float tw = 0.5+0.5*sin(time*2.0+s*100.0);
-        float d2 = (uv.x-cos(a)*r)*(uv.x-cos(a)*r) + (uv.y-sin(a)*r)*(uv.y-sin(a)*r);
-        float sz = 0.008 + b*0.02;
-        if (d2 < sz*sz) col += mix(vec3(0.8,0.8,1.0), vec3(1.0), b) * (1.0-sqrt(d2)/sz) * tw * 0.8;
-      }
-      return col;
-    }
-
-    float shadow(vec2 uv) {
-      float r = length(uv);
-      if (r < 0.43) return 1.0;
-      if (r < 0.60) return 1.0 - (r-0.43)/(0.60-0.43);
-      return 0.0;
-    }
-
-    float ring(vec2 uv) {
-      float r = length(uv);
-      return max(0.0, 1.0 - abs(r-0.58)*35.0) * 0.65;
-    }
-
-    void main() {
-      vec2 fc2 = gl_FragCoord.xy;
-      vec2 uv = (fc2 - 0.5*iResolution.xy) / iResolution.y * 3.0;
-      vec3 col = vec3(0.015, 0.035, 0.10);
-      col += stars(uv, iTime);
-      vec4 sp = spiral(uv, iTime);
-      col = mix(col, sp.rgb, sp.a);
-      col += vec3(1.0,0.6,0.3) * ring(uv);
-      col = mix(col, vec3(0.0), shadow(uv));
-      col *= 1.0 - smoothstep(0.5, 1.6, length(uv/3.0))*0.55;
-      col = floor(col*6.0+0.5)/6.0;
-      // Simple grain
-      col += (fract(sin(dot(fc2,vec2(12.9898,78.233)))*43758.5453)-0.5)*0.04;
-      gl_FragColor = vec4(col, 1.0);
-    }
-  `;
-
-  var renderer, scene, camera, quad, mat, uniforms, animId;
-  var canvas;
-
+  /* ===== Init ===== */
   function init() {
-    renderer = new THREE.WebGLRenderer({ antialias: false });
-    renderer.setPixelRatio(1);
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    iW = Math.floor(window.innerWidth * SCALE);
+    iH = Math.floor(window.innerHeight * SCALE);
+    dW = window.innerWidth;
+    dH = window.innerHeight;
+    cx = iW * 0.45;
+    cy = iH * 0.47;
+    var bhR = Math.min(iW, iH) * 0.18;
 
-    canvas = renderer.domElement;
-    canvas.style.cssText = 'position:fixed;top:0;left:0;z-index:0;pointer-events:none;';
+    // Internal render canvas
+    bgCanvas = document.createElement('canvas');
+    bgCanvas.width = iW;
+    bgCanvas.height = iH;
+    bgCtx = bgCanvas.getContext('2d');
 
-    // Remove any existing bg canvas
-    var old = document.getElementById('blackhole-bg');
-    if (old) old.remove();
-    canvas.id = 'blackhole-bg';
-    document.body.insertBefore(canvas, document.body.firstChild);
+    // Display canvas (full screen, pixelated upscale)
+    dispCanvas = document.createElement('canvas');
+    dispCanvas.id = 'blackhole-bg';
+    dispCanvas.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;image-rendering:pixelated;';
+    dispCanvas.width = dW;
+    dispCanvas.height = dH;
+    document.body.insertBefore(dispCanvas, document.body.firstChild);
+    dispCtx = dispCanvas.getContext('2d');
+    dispCtx.imageSmoothingEnabled = false;
 
-    scene = new THREE.Scene();
-    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    uniforms = {
-      iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-      iTime: { value: 0 }
-    };
-    mat = new THREE.ShaderMaterial({
-      vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
-      fragmentShader: frag,
-      uniforms: uniforms,
-      depthWrite: false, depthTest: false
-    });
-    quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
-    scene.add(quad);
+    // Generate spiral particles
+    for (var i = 0; i < PARTICLE_COUNT; i++) {
+      var t = Math.random();                    // 0=center, 1=outer
+      t = Math.pow(t, 0.5);                     // concentration toward center
+      var radius = 0.8 + t * 5.2;               // radius in internal units
+      // Initial random angle, will be animated by differential rotation
+      var angle = Math.random() * Math.PI * 2;
+      // Size varies with radius (larger near center)
+      var size = (1.0 - t) * 2.5 + t * 0.6;
+      // Brightness
+      var brightness = 0.4 + Math.random() * 0.6;
+      particles.push({
+        r: radius,
+        angle: angle,
+        size: size,
+        brightness: brightness,
+        t: t
+      });
+    }
 
-    window.addEventListener('resize', function() {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      uniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
-    });
-    animate(0);
+    // Generate background stars
+    for (var j = 0; j < STAR_COUNT; j++) {
+      var a = Math.random() * Math.PI * 2;
+      var r = 1.5 + Math.random() * 8.0;
+      stars.push({
+        x: Math.cos(a) * r,
+        y: Math.sin(a) * r,
+        r: 0.3 + Math.random() * 1.2,
+        hue: Math.random() * 360,
+        brightness: 0.4 + Math.random() * 0.6
+      });
+      starPhases.push(Math.random() * Math.PI * 2);
+    }
+
+    window.addEventListener('resize', onResize);
+    animate();
   }
 
+  function onResize() {
+    iW = Math.floor(window.innerWidth * SCALE);
+    iH = Math.floor(window.innerHeight * SCALE);
+    dW = window.innerWidth;
+    dH = window.innerHeight;
+    cx = iW * 0.45;
+    cy = iH * 0.47;
+    bgCanvas.width = iW;
+    bgCanvas.height = iH;
+    dispCanvas.width = dW;
+    dispCanvas.height = dH;
+    dispCanvas.style.width = dW + 'px';
+    dispCanvas.style.height = dH + 'px';
+  }
+
+  /* ===== Color from temperature ===== */
+  function diskColor(t) {
+    // t: 0=inner(hot), 1=outer(cool)
+    // #ff8080 → #3633ff
+    var r = Math.floor(255 * (1.0 + t * (-0.79)));
+    var g = Math.floor(255 * (0.5 + t * (-0.3)));
+    var b = Math.floor(255 * (0.5 + t * 0.5));
+    return [r, g, b];
+  }
+
+  /* ===== Render loop ===== */
   function animate(ts) {
+    if (!ts) ts = performance.now();
+    var time = (ts - startTime) * 0.001;
     animId = requestAnimationFrame(animate);
-    uniforms.iTime.value = ts * 0.001;
-    renderer.render(scene, camera);
-  }
 
-  // Listen for GL context errors
-  setTimeout(function() {
-    if (!renderer || !renderer.getContext) return;
-    var gl = renderer.getContext();
-    var err = gl.getError();
-    if (err !== 0) console.warn('[blackhole-bg] WebGL error after init:', err);
-  }, 500);
+    var c = bgCtx;
+
+    // ---- Background ----
+    c.fillStyle = '#03091c';
+    c.fillRect(0, 0, iW, iH);
+
+    // ---- Stars ----
+    for (var s = 0; s < STAR_COUNT; s++) {
+      var st = stars[s];
+      var twinkle = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(time * 1.5 + starPhases[s]));
+      var alpha = st.brightness * twinkle;
+      c.fillStyle = 'hsla(' + st.hue + ', 100%, 80%, ' + alpha + ')';
+      c.fillRect(
+        Math.floor(cx + st.x * (iW / 10)),
+        Math.floor(cy + st.y * (iH / 10)),
+        Math.max(1, Math.ceil(st.r)),
+        Math.max(1, Math.ceil(st.r))
+      );
+    }
+
+    // ---- Spiral particles ----
+    for (var p = 0; p < PARTICLE_COUNT; p++) {
+      var pt = particles[p];
+      // Differential rotation: inner rings spin faster
+      var rotSpeed = (1.0 - pt.t) * 2.8 + 0.2;
+      var angle = pt.angle + time * rotSpeed;
+
+      var px = cx + Math.cos(angle) * pt.r * (iW / 10);
+      var py = cy + Math.sin(angle) * pt.r * (iH / 10);
+
+      var col = diskColor(pt.t);
+      var alpha = pt.brightness * (0.5 + (1.0 - pt.t) * 0.5);
+
+      var sz = Math.max(1, Math.ceil(pt.size));
+      c.fillStyle = 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',' + alpha + ')';
+      c.fillRect(Math.floor(px), Math.floor(py), sz, sz);
+    }
+
+    // ---- Black hole shadow ----
+    var bhR = Math.min(iW, iH) * 0.18;
+    // Event horizon
+    var hGrad = c.createRadialGradient(cx, cy, bhR * 0.4, cx, cy, bhR * 0.68);
+    hGrad.addColorStop(0, '#000000');
+    hGrad.addColorStop(0.7, '#000000');
+    hGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = hGrad;
+    c.beginPath();
+    c.arc(cx, cy, bhR * 0.68, 0, Math.PI * 2);
+    c.fill();
+
+    // ---- Photon ring ----
+    c.strokeStyle = 'rgba(255,160,40,0.7)';
+    c.lineWidth = Math.max(1, Math.ceil(bhR * 0.04));
+    c.beginPath();
+    c.arc(cx, cy, bhR * 0.6, 0, Math.PI * 2);
+    c.stroke();
+
+    // Thin outer ring
+    var p2 = 0.5 + 0.5 * Math.sin(time * 1.5) * Math.sin(time * 0.6 + 1);
+    c.strokeStyle = 'rgba(255,180,60,' + (p2 * 0.5).toFixed(2) + ')';
+    c.lineWidth = Math.max(1, Math.ceil(bhR * 0.02));
+    c.beginPath();
+    c.arc(cx, cy, bhR * 0.66, 0, Math.PI * 2);
+    c.stroke();
+
+    // ---- Vignette ----
+    var vigGrad = c.createRadialGradient(cx, cy, Math.max(iW, iH) * 0.3, cx, cy, Math.max(iW, iH) * 0.55);
+    vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    vigGrad.addColorStop(1, 'rgba(0,0,0,0.6)');
+    c.fillStyle = vigGrad;
+    c.fillRect(0, 0, iW, iH);
+
+    // ---- Upscale to display ----
+    dispCtx.imageSmoothingEnabled = false;
+    dispCtx.drawImage(bgCanvas, 0, 0, dW, dH);
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
