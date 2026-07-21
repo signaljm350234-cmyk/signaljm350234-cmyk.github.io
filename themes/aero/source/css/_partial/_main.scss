@@ -1,12 +1,16 @@
 /* PC-98 Desktop Main Styles */
 
+html {
+    background: #000;
+}
+
 body {
     font-family: var(--font-body);
     color: var(--pc98-text);
     margin: 0;
     height: 100vh;
     overflow: hidden;
-    background-color: #000008;
+    background: transparent;
 }
 
 /* Desktop container */

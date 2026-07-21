@@ -21,9 +21,10 @@
     var isDesktop = true;
 
     function init() {
+        console.log('[blackhole-bg] init start, WxH:', window.innerWidth, 'x', window.innerHeight);
         canvas = document.createElement('canvas');
         canvas.id = 'blackhole-bg';
-        canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:-10;pointer-events:none;';
+        canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;';
         document.body.insertBefore(canvas, document.body.firstChild);
         ctx = canvas.getContext('2d');
 
