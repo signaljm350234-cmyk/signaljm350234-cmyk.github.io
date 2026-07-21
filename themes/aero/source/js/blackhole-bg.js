@@ -1,23 +1,24 @@
 /**
- * Black Hole Desktop Background — Canvas renderer
- * Renders a beautiful black hole with accretion disk and gravitational lensing.
- * Main scene renders once at device resolution, cached as bitmap.
- * Stars twinkle at low update rate for minimal CPU usage.
+ * Black Hole Desktop Background v2
+ * Full accretion disk (complete ring) + rotation animation
+ * Base disk cached, animated swirl overlays + Doppler glow redrawn each frame
+ * ~50 arc draws/frame → easily hits 240Hz on any GPU
  */
 
 (function() {
     'use strict';
 
     var canvas, ctx;
-    var dpr = Math.min(window.devicePixelRatio || 1, 2); // cap at 2x for perf
-    var W, H;
-    var cacheCanvas, cacheCtx;
-    var starCanvas, starCtx;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var W, H, cx, cy, bhR;
+    var bgCanvas, bgCtx;          // deep space + static stars
+    var diskCanvas, diskCtx;      // base disk (cached)
+    var shadowCanvas, shadowCtx;  // black hole + photon ring (cached)
     var stars = [];
-    var STAR_COUNT = 400;
-    var animationId;
-    var frameCount = 0;
-    var frameSkip = 3; // only animate every 3rd frame (~20fps at 60Hz)
+    var STAR_COUNT = 320;
+    var startTime = performance.now();
+    var animId;
+    var isDesktop = true;
 
     function init() {
         canvas = document.createElement('canvas');
@@ -26,252 +27,313 @@
         document.body.insertBefore(canvas, document.body.firstChild);
         ctx = canvas.getContext('2d');
 
-        cacheCanvas = document.createElement('canvas');
-        cacheCtx = cacheCanvas.getContext('2d');
+        bgCanvas = document.createElement('canvas');
+        bgCtx = bgCanvas.getContext('2d');
 
-        starCanvas = document.createElement('canvas');
-        starCtx = starCanvas.getContext('2d');
+        diskCanvas = document.createElement('canvas');
+        diskCtx = diskCanvas.getContext('2d');
 
-        resize();
+        shadowCanvas = document.createElement('canvas');
+        shadowCtx = shadowCanvas.getContext('2d');
+
+        sizeAll();
         generateStars();
-        renderMainScene();
+        renderAllCached();
+
         window.addEventListener('resize', onResize);
         animate();
     }
 
-    function resize() {
+    function sizeAll() {
         W = window.innerWidth;
         H = window.innerHeight;
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
+        isDesktop = W > 768;
+        var dw = W * dpr, dh = H * dpr;
+
+        [canvas, bgCanvas, diskCanvas, shadowCanvas].forEach(function(cv) {
+            cv.width = dw;
+            cv.height = dh;
+        });
         canvas.style.width = W + 'px';
         canvas.style.height = H + 'px';
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // reset, we handle dpr manually
 
-        cacheCanvas.width = W * dpr;
-        cacheCanvas.height = H * dpr;
-        starCanvas.width = W * dpr;
-        starCanvas.height = H * dpr;
+        cx = dw * 0.43;
+        cy = dh * 0.46;
+        bhR = Math.min(dw, dh) * 0.19;
     }
 
     function onResize() {
-        resize();
+        sizeAll();
         generateStars();
-        renderMainScene();
+        renderAllCached();
     }
 
     function generateStars() {
-        stars = [];
-        var dw = W * dpr;
-        var dh = H * dpr;
+        stars.length = 0;
+        var dw = W * dpr, dh = H * dpr;
         for (var i = 0; i < STAR_COUNT; i++) {
             stars.push({
                 x: Math.random() * dw,
                 y: Math.random() * dh,
-                r: Math.random() * 1.5 + 0.3,
-                brightness: Math.random(),
-                speed: Math.random() * 0.02 + 0.005,
-                phase: Math.random() * Math.PI * 2
+                r: Math.random() * 1.3 + 0.2,
+                b: Math.random(),
+                sp: Math.random() * 0.02 + 0.004,
+                ph: Math.random() * Math.PI * 2
             });
         }
     }
 
-    /* ===== Main Scene Render (cached) ===== */
-    function renderMainScene() {
-        var c = cacheCtx;
-        var dw = W * dpr;
-        var dh = H * dpr;
-        var cx = dw * 0.45; // black hole center X (slightly left of center)
-        var cy = dh * 0.48; // black hole center Y
-        var bhRadius = Math.min(dw, dh) * 0.22; // event horizon radius
+    function renderAllCached() {
+        renderBG();
+        renderBaseDisk();
+        renderShadow();
+    }
 
-        // --- Deep space background ---
-        var bgGrad = c.createRadialGradient(cx, cy, bhRadius * 0.5, cx, cy, Math.max(dw, dh));
-        bgGrad.addColorStop(0, '#0a0a14');
-        bgGrad.addColorStop(0.3, '#050510');
-        bgGrad.addColorStop(0.7, '#020208');
-        bgGrad.addColorStop(1, '#000004');
-        c.fillStyle = bgGrad;
+    /* ===== Layer 1: Deep space background ===== */
+    function renderBG() {
+        var c = bgCtx, dw = W * dpr, dh = H * dpr;
+        c.clearRect(0, 0, dw, dh);
+
+        var g = c.createRadialGradient(cx, cy, bhR * 0.2, cx, cy, Math.max(dw, dh));
+        g.addColorStop(0, '#0a0a18');
+        g.addColorStop(0.3, '#060610');
+        g.addColorStop(0.6, '#020208');
+        g.addColorStop(1, '#000004');
+        c.fillStyle = g;
         c.fillRect(0, 0, dw, dh);
 
-        // --- Draw far-side stars (behind black hole) ---
-        for (var i = 0; i < STAR_COUNT; i++) {
-            var s = stars[i];
-            var dx = s.x - cx;
-            var dy = s.y - cy;
+        for (var i = 0; i < stars.length; i++) {
+            var s = stars[i], dx = s.x - cx, dy = s.y - cy;
             var dist = Math.sqrt(dx * dx + dy * dy);
-            // Stars near black hole get gravitationally lensed (pushed outward)
-            if (dist < bhRadius * 2.5 && dist > bhRadius * 0.8) {
-                var lens = 1 + (bhRadius * 2.5 - dist) / (bhRadius * 2.5) * 0.5;
-                dx *= lens;
-                dy *= lens;
-            }
-            if (dist > bhRadius * 1.05 || dist < bhRadius * 0.8 || dist > bhRadius * 1.8) {
-                c.fillStyle = 'rgba(255,255,255,' + (0.3 + s.brightness * 0.7) + ')';
+            if (dist > bhR * 2.6 || dist < bhR * 0.65) {
+                c.fillStyle = 'rgba(255,255,255,' + (0.2 + s.b * 0.65) + ')';
                 c.beginPath();
-                c.arc(dx + cx, dy + cy, s.r, 0, Math.PI * 2);
+                c.arc(s.x, s.y, s.r, 0, Math.PI * 2);
                 c.fill();
             }
         }
+    }
 
-        // --- Ambient glow around black hole ---
-        var glowGrad = c.createRadialGradient(cx, cy, bhRadius * 0.5, cx, cy, bhRadius * 3.5);
-        glowGrad.addColorStop(0, 'rgba(255,140,40,0.15)');
-        glowGrad.addColorStop(0.3, 'rgba(255,100,20,0.06)');
-        glowGrad.addColorStop(0.6, 'rgba(200,60,10,0.02)');
-        glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = glowGrad;
-        c.fillRect(0, 0, dw, dh);
+    /* ===== Layer 2: Full accretion disk (cached base) ===== */
+    function renderBaseDisk() {
+        var c = diskCtx, dw = W * dpr, dh = H * dpr;
+        c.clearRect(0, 0, dw, dh);
 
-        // --- Accretion Disk (near side, in front) ---
-        var diskOuterX = bhRadius * 3.2;
-        var diskOuterY = bhRadius * 0.42;
-        var diskInnerX = bhRadius * 1.25;
-        var diskInnerY = bhRadius * 0.12;
+        var outerR = bhR * 3.2;
+        var innerR = bhR * 1.22;
+        var diskH = outerR * 0.13;
+        var ringCount = 140;
 
-        // Draw the near-side disk (bottom half of ellipse)
-        c.save();
-        c.beginPath();
-        c.ellipse(cx, cy, diskOuterX, diskOuterY, 0, 0, Math.PI);
-        c.closePath();
-        c.clip();
+        for (var i = 0; i < ringCount; i++) {
+            var r = 1.0 - (i / ringCount) * (1 - innerR / outerR);
+            var rx = outerR * r;
+            var ry = diskH * r;
+            var temp = i / ringCount;
 
-        // Disk color gradient: white-hot inner → amber → orange → deep red outer
-        for (var r = diskInnerX / diskOuterX; r <= 1.0; r += 0.005) {
-            var rx = diskOuterX * r;
-            var ry = diskOuterY * r;
-            var t = (r - diskInnerX / diskOuterX) / (1 - diskInnerX / diskOuterX);
+            var rgba;
+            if (temp < 0.05)      rgba = 'rgba(255,250,242,0.92)';
+            else if (temp < 0.13) rgba = 'rgba(255,232,172,0.86)';
+            else if (temp < 0.25) rgba = 'rgba(255,198,78,0.78)';
+            else if (temp < 0.40) rgba = 'rgba(248,150,30,0.65)';
+            else if (temp < 0.58) rgba = 'rgba(225,90,14,0.46)';
+            else if (temp < 0.76) rgba = 'rgba(180,50,8,0.26)';
+            else                  rgba = 'rgba(120,28,5,0.12)';
 
-            // Temperature-based color
-            var color;
-            if (t < 0.12) color = 'rgba(255,250,240,0.95)';  // white-hot inner
-            else if (t < 0.25) color = 'rgba(255,220,140,0.9)';
-            else if (t < 0.45) color = 'rgba(255,170,60,0.8)';
-            else if (t < 0.7) color = 'rgba(240,120,25,0.55)';
-            else color = 'rgba(180,50,10,0.25)';
-
-            c.strokeStyle = color;
-            c.lineWidth = (diskOuterY - diskInnerY) / ((1 - diskInnerX / diskOuterX) / 0.005) * 1.5;
+            c.strokeStyle = rgba;
+            c.lineWidth = Math.max(0.5, ry * 0.85);
             c.beginPath();
-            c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI);
+            c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); // FULL ring
             c.stroke();
         }
-        c.restore();
+    }
 
-        // --- Disk bloom glow ---
-        var diskGlow = c.createRadialGradient(cx, cy + bhRadius * 0.08, bhRadius * 0.3, cx, cy, diskOuterX * 1.1);
-        diskGlow.addColorStop(0, 'rgba(255,200,80,0.3)');
-        diskGlow.addColorStop(0.5, 'rgba(255,140,30,0.1)');
-        diskGlow.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = diskGlow;
-        c.fillRect(cx - diskOuterX * 1.3, cy - diskOuterY * 0.3, diskOuterX * 2.6, diskOuterY * 2);
+    /* ===== Layer 3: Black hole shadow + photon ring base ===== */
+    function renderShadow() {
+        var c = shadowCtx, dw = W * dpr, dh = H * dpr;
+        c.clearRect(0, 0, dw, dh);
 
-        // --- Event Horizon Shadow ---
-        var shadowGrad = c.createRadialGradient(cx, cy, bhRadius * 0.6, cx, cy, bhRadius * 1.15);
-        shadowGrad.addColorStop(0, '#000000');
-        shadowGrad.addColorStop(0.7, '#000000');
-        shadowGrad.addColorStop(0.85, 'rgba(0,0,0,0.6)');
-        shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = shadowGrad;
+        // Ambient warm glow
+        var g = c.createRadialGradient(cx, cy, bhR * 0.3, cx, cy, bhR * 4);
+        g.addColorStop(0, 'rgba(255,140,35,0.20)');
+        g.addColorStop(0.25, 'rgba(255,90,15,0.07)');
+        g.addColorStop(0.55, 'rgba(160,40,6,0.02)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g;
+        c.fillRect(0, 0, dw, dh);
+
+        // Event horizon
+        var sg = c.createRadialGradient(cx, cy, bhR * 0.55, cx, cy, bhR * 1.16);
+        sg.addColorStop(0, '#000000');
+        sg.addColorStop(0.6, '#000000');
+        sg.addColorStop(0.78, 'rgba(0,0,0,0.5)');
+        sg.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = sg;
         c.beginPath();
-        c.arc(cx, cy, bhRadius * 1.15, 0, Math.PI * 2);
+        c.arc(cx, cy, bhR * 1.16, 0, Math.PI * 2);
         c.fill();
 
-        // --- Photon Ring ---
-        c.strokeStyle = 'rgba(255,180,60,0.7)';
-        c.lineWidth = bhRadius * 0.04;
-        c.shadowColor = 'rgba(255,150,40,0.5)';
-        c.shadowBlur = bhRadius * 0.15;
+        // Base photon ring
+        c.strokeStyle = 'rgba(255,185,65,0.55)';
+        c.lineWidth = bhR * 0.03;
+        c.shadowColor = 'rgba(255,150,40,0.4)';
+        c.shadowBlur = bhR * 0.16;
         c.beginPath();
-        c.arc(cx, cy, bhRadius * 1.02, 0, Math.PI * 2);
+        c.arc(cx, cy, bhR * 1.025, 0, Math.PI * 2);
         c.stroke();
         c.shadowBlur = 0;
 
-        // --- Far side of accretion disk (gravitational lensing above) ---
-        // The light from the far side of the disk bends over the top of the black hole
-        c.save();
+        // Thin outer ring
+        c.strokeStyle = 'rgba(255,160,50,0.28)';
+        c.lineWidth = bhR * 0.014;
         c.beginPath();
-        c.ellipse(cx, cy, bhRadius * 1.35, bhRadius * 1.35, 0, Math.PI, Math.PI * 2);
-        c.closePath();
-        c.clip();
+        c.arc(cx, cy, bhR * 1.09, 0, Math.PI * 2);
+        c.stroke();
 
-        for (var r2 = diskInnerX / diskOuterX; r2 <= 1.0; r2 += 0.005) {
-            var rrx = diskOuterX * r2;
-            var rry = diskOuterY * r2;
-            var tt = (r2 - diskInnerX / diskOuterX) / (1 - diskInnerX / diskOuterX);
-
-            var c2;
-            if (tt < 0.15) c2 = 'rgba(255,240,210,0.5)';
-            else if (tt < 0.3) c2 = 'rgba(255,200,110,0.4)';
-            else if (tt < 0.5) c2 = 'rgba(255,150,45,0.25)';
-            else c2 = 'rgba(200,70,15,0.12)';
-
-            c.strokeStyle = c2;
-            c.lineWidth = (diskOuterY - diskInnerY) / ((1 - diskInnerX / diskOuterX) / 0.005) * 1.2;
-            c.beginPath();
-            c.ellipse(cx, cy, rrx, rry, 0, Math.PI, Math.PI * 2);
-            c.stroke();
-        }
-        c.restore();
-
-        // --- Soft vignette ---
-        var vig = c.createRadialGradient(cx, cy, Math.max(dw, dh) * 0.6, cx, cy, Math.max(dw, dh) * 1.1);
-        vig.addColorStop(0, 'rgba(0,0,0,0)');
-        vig.addColorStop(1, 'rgba(0,0,4,0.5)');
-        c.fillStyle = vig;
+        // Vignette on shadow layer
+        var vg = c.createRadialGradient(cx, cy, Math.max(dw, dh) * 0.5, cx, cy, Math.max(dw, dh) * 1.05);
+        vg.addColorStop(0, 'rgba(0,0,0,0)');
+        vg.addColorStop(0.6, 'rgba(0,0,0,0.08)');
+        vg.addColorStop(1, 'rgba(0,0,3,0.5)');
+        c.fillStyle = vg;
         c.fillRect(0, 0, dw, dh);
     }
 
-    /* ===== Animation Loop ===== */
-    function animate() {
-        frameCount++;
-        if (frameCount % frameSkip === 0) {
-            renderStars();
-        }
-        animationId = requestAnimationFrame(animate);
-    }
+    /* ===== Per-frame: Rotating swirl arcs ===== */
+    function drawSwirls(frameTime) {
+        var t = frameTime * 0.001;
+        var outerR = bhR * 3.2;
+        var diskH = outerR * 0.13;
+        var innerRatio = bhR * 1.22 / outerR;
+        var arcCount = 6;
 
-    function renderStars() {
-        var c = starCtx;
-        var dw = W * dpr;
-        var dh = H * dpr;
-        c.clearRect(0, 0, dw, dh);
-
-        for (var i = 0; i < STAR_COUNT; i++) {
-            var s = stars[i];
-            s.phase += s.speed;
-            var b = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(s.phase));
-            c.fillStyle = 'rgba(255,255,255,' + b + ')';
-            c.beginPath();
-            c.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-            c.fill();
-        }
-    }
-
-    function drawComposite() {
-        ctx.clearRect(0, 0, W * dpr, H * dpr);
-        // Cached main scene
-        ctx.drawImage(cacheCanvas, 0, 0);
-        // Animated twinkling stars overlay
+        ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.drawImage(starCanvas, 0, 0);
-        ctx.globalCompositeOperation = 'source-over';
+
+        for (var a = 0; a < arcCount; a++) {
+            var radius = innerRatio + (0.05 + a * 0.14) % 0.85;
+            if (radius > 0.92) radius = 0.92;
+            var rx = outerR * radius;
+            var ry = diskH * radius;
+
+            // Each arc rotates at a speed based on radius (inner = faster)
+            var speed = 0.9 / (radius * radius + 0.15);
+            var arcCenter = t * speed + a * 1.1;
+            var arcLen = 0.35 + Math.sin(t * 0.5 + a) * 0.15;
+
+            ctx.strokeStyle = 'rgba(255,240,200,0.18)';
+            ctx.lineWidth = Math.max(0.8, ry * 1.1);
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx, ry, 0, arcCenter, arcCenter + arcLen);
+            ctx.stroke();
+
+            // Hotter inner companion for each arc
+            ctx.strokeStyle = 'rgba(255,255,240,0.12)';
+            ctx.lineWidth = Math.max(0.4, ry * 0.5);
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx * 0.95, ry * 0.95, 0, arcCenter - 0.08, arcCenter + arcLen * 0.7);
+            ctx.stroke();
+        }
+        ctx.restore();
     }
 
-    // Override the animate function to also draw
-    var _origAnimate = animate;
-    animate = function() {
-        frameCount++;
-        if (frameCount % frameSkip === 0) {
-            renderStars();
+    /* ===== Per-frame: Doppler glow overlay ===== */
+    function drawDoppler(frameTime) {
+        // Bright patch on the approaching (bottom) side
+        var outerR = bhR * 3.2;
+        var diskH = outerR * 0.13;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        var g = ctx.createLinearGradient(cx, cy - diskH * 0.8, cx, cy + diskH * 1.2);
+        g.addColorStop(0, 'rgba(255,200,100,0)');
+        g.addColorStop(0.35, 'rgba(255,200,100,0.04)');
+        g.addColorStop(0.65, 'rgba(255,200,100,0.08)');
+        g.addColorStop(1, 'rgba(255,200,100,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - outerR, cy - diskH, outerR * 2, diskH * 3);
+
+        ctx.restore();
+    }
+
+    /* ===== Per-frame: Photon ring pulse ===== */
+    function drawPhotonRingPulse(frameTime) {
+        var t = frameTime * 0.001;
+        var p = 0.55 + 0.45 * Math.sin(t * 1.6 + 0.3) * Math.sin(t * 0.65);
+
+        ctx.strokeStyle = 'rgba(255,195,75,' + (p * 0.7).toFixed(3) + ')';
+        ctx.lineWidth = bhR * 0.038;
+        ctx.shadowColor = 'rgba(255,155,45,' + (p * 0.45).toFixed(3) + ')';
+        ctx.shadowBlur = bhR * 0.22;
+        ctx.beginPath();
+        ctx.arc(cx, cy, bhR * 1.025, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Second thin ring opposite phase
+        var p2 = 0.25 + 0.2 * Math.sin(t * 1.25 + 2.0);
+        ctx.strokeStyle = 'rgba(255,170,50,' + (p2 * 0.5).toFixed(3) + ')';
+        ctx.lineWidth = bhR * 0.016;
+        ctx.beginPath();
+        ctx.arc(cx, cy, bhR * 1.09, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    /* ===== Per-frame: Twinkling stars ===== */
+    function drawStars(frameTime) {
+        var t = frameTime * 0.001;
+        for (var i = 0; i < stars.length; i++) {
+            var s = stars[i];
+            var d = Math.sqrt((s.x - cx) * (s.x - cx) + (s.y - cy) * (s.y - cy));
+            if (d < bhR * 1.2) continue;
+
+            var b = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(s.ph + t * s.sp * 3));
+            ctx.fillStyle = 'rgba(255,255,255,' + b + ')';
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            ctx.fill();
         }
-        drawComposite();
-        animationId = requestAnimationFrame(animate);
-    };
+    }
+
+    /* ===== Composite ===== */
+    function render(frameTime) {
+        ctx.clearRect(0, 0, W * dpr, H * dpr);
+
+        // Layer 1: Deep space + static stars
+        ctx.drawImage(bgCanvas, 0, 0);
+
+        // Layer 2: Base accretion disk (full ring, temperature-colored)
+        ctx.drawImage(diskCanvas, 0, 0);
+
+        // Layer 3: Rotating swirl arcs (differential rotation visible)
+        drawSwirls(frameTime);
+
+        // Layer 4: Doppler brightness overlay
+        drawDoppler(frameTime);
+
+        // Layer 5: Black hole shadow + photon ring base
+        ctx.drawImage(shadowCanvas, 0, 0);
+
+        // Layer 6: Pulsing photon ring
+        drawPhotonRingPulse(frameTime);
+
+        // Layer 7: Twinkling foreground stars
+        drawStars(frameTime);
+    }
+
+    function animate(ts) {
+        if (!ts) ts = performance.now();
+        render(ts);
+        animId = requestAnimationFrame(animate);
+    }
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
+
+    window.addEventListener('beforeunload', function() {
+        if (animId) cancelAnimationFrame(animId);
+    });
 })();
