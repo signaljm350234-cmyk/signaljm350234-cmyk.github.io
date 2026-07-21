@@ -31,6 +31,7 @@ code_dir: downloads/code
 i18n_dir: :lang
 skip_render:
   - _data/*
+  - galaxy-bg/**
 
 # Writing
 new_post_name: :title.md

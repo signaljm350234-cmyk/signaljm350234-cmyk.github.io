@@ -9,6 +9,7 @@
     flex-direction: column;
     gap: 12px;
     z-index: 5;
+    pointer-events: auto;
 }
 
 .desktop-icon {
@@ -65,6 +66,7 @@
     gap: 4px;
     z-index: 1000;
     box-shadow: 0 -2px 4px rgba(0,0,0,0.3);
+    pointer-events: auto;
 }
 
 .taskbar-item {
@@ -164,6 +166,7 @@
     cursor: grab;
     user-select: none;
     min-width: 250px;
+    pointer-events: auto;
 }
 .desktop-window:active {
     cursor: grabbing;
