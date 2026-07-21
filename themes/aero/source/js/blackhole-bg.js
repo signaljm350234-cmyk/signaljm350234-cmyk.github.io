@@ -1,279 +1,189 @@
 /**
  * Black Hole Desktop Background v5 — Three.js GPU Shader
  *
- * Renders a physically-based Schwarzschild black hole with:
- *  - Gravitational lensing (light deflection)
- *  - Full accretion disk with temperature coloring
- *  - Photon ring
- *  - Spacetime curvature grid
- *  - Teardrop infalling mass
- *  - Pixel-art upscaling for retro look
- *
- * Three.js loaded via CDN in layout template.
- * This file expects `window.THREE` to be available.
+ * Per-pixel ray-traced Schwarzschild black hole on the GPU.
+ * Three.js CDN loads first, then this script picks up window.THREE.
  */
 
 (function() {
   'use strict';
 
+  if (!window.THREE) { setTimeout(arguments.callee, 80); return; }
   var THREE = window.THREE;
-  if (!THREE) {
-    // Retry after a short delay — CDN might still be loading
-    setTimeout(arguments.callee, 100);
-    return;
-  }
 
   /* ================================================================
-     Fragment Shader — Where everything happens
+     Fragment Shader
      ================================================================ */
   var fragmentShader = /* glsl */ `
     precision highp float;
-
     uniform vec2  iResolution;
     uniform float iTime;
-    uniform vec2  iMouse;
 
     #define PI   3.14159265359
-    #define TAU  6.28318530718
     #define RS   1.0
     #define ISCO 3.0
 
-    // ---------------------------------------------------------------
-    // Ray-sphere (black hole horizon) hit test
-    // ---------------------------------------------------------------
-    float raySphere(vec3 ro, vec3 rd, vec3 center, float radius) {
-      vec3 oc = ro - center;
+    float raySphere(vec3 ro, vec3 rd, vec3 c, float r) {
+      vec3 oc = ro - c;
       float b = dot(oc, rd);
-      float c = dot(oc, oc) - radius * radius;
-      float h = b * b - c;
+      float h = b*b - dot(oc,oc) + r*r;
       if (h < 0.0) return -1.0;
       float d = -b - sqrt(h);
       return d > 0.0 ? d : (-b + sqrt(h));
     }
 
-    // ---------------------------------------------------------------
-    // Deflection angle for light passing Schwarzschild black hole
-    // Approximate formula: alpha = 2*rs / b  (weak field)
-    // Strong field correction near photon sphere (b -> sqrt(27)/2 * rs ≈ 2.598)
-    // ---------------------------------------------------------------
+    // Schwarzschild deflection angle (strong-field approximation)
     float deflectionAngle(float b) {
-      float bCrit = 2.598076; // 3*sqrt(3)/2
-      if (b < bCrit * 1.001) return 999.0; // captured
-      // Strong-field approximation
-      float alpha = 2.0 / b;                         // leading order
-      alpha += 15.0 * PI / 16.0 / (b * b * b);     // 2nd order
-      alpha += 1.5 / (b - bCrit);                    // divergence near photon sphere
-      return clamp(alpha, 0.0, PI * 2.0);
+      float bCrit = 2.598076;
+      if (b < bCrit * 1.001) return 999.0;
+      float a = 2.0 / b;
+      a += 15.0 * PI / 16.0 / (b*b*b);
+      a += 1.5 / (b - bCrit);
+      return clamp(a, 0.0, PI * 2.0);
     }
 
-    // ---------------------------------------------------------------
-    // Disk color — temperature profile (Qwen reference)
-    // ---------------------------------------------------------------
+    // Disk temperature → RGB
     vec3 diskColor(float r) {
-      float t = (r - ISCO) / 9.0;   // 0 at ISCO, ~1 at outer edge
-      t = clamp(t, 0.0, 1.0);
-
-      vec3 col;
-      if      (t < 0.06) col = vec3(0.55, 0.07, 0.03);  // dark red (inner, redshifted)
-      else if (t < 0.15) col = vec3(0.70, 0.12, 0.04);
-      else if (t < 0.25) col = vec3(0.87, 0.35, 0.06);  // orange-red
-      else if (t < 0.40) col = vec3(1.00, 0.55, 0.14);  // bright orange (main glow)
-      else if (t < 0.55) col = vec3(0.98, 0.47, 0.11);
-      else if (t < 0.70) col = vec3(0.82, 0.28, 0.07);  // cooling
-      else if (t < 0.85) col = vec3(0.60, 0.26, 0.18);  // pale pink
-      else               col = vec3(0.30, 0.12, 0.08);  // fading
-      return col;
+      float t = clamp((r - ISCO) / 9.0, 0.0, 1.0);
+      if      (t < 0.06) return vec3(0.55, 0.07, 0.03);
+      else if (t < 0.15) return vec3(0.70, 0.12, 0.04);
+      else if (t < 0.25) return vec3(0.88, 0.36, 0.07);
+      else if (t < 0.40) return vec3(1.00, 0.55, 0.14);
+      else if (t < 0.55) return vec3(0.97, 0.47, 0.12);
+      else if (t < 0.70) return vec3(0.82, 0.28, 0.08);
+      else if (t < 0.85) return vec3(0.60, 0.26, 0.18);
+      else               return vec3(0.28, 0.10, 0.07);
     }
 
-    // ---------------------------------------------------------------
-    // Spacetime grid — computed on equatorial plane
-    // ---------------------------------------------------------------
-    float gridPattern(vec2 p, float bhDist) {
+    float gridPattern(vec2 p, float r) {
       float spacing = 1.5;
-      // Warp grid lines near black hole (funnel depression)
-      float warp = 4.0 * exp(-bhDist * bhDist / 20.0);
+      float warp = 4.0 * exp(-r*r / 20.0);
       vec2 gp = p / spacing;
-      // Radial compression near black hole
-      float r = length(p);
-      float compress = 1.0 + 2.5 * exp(-r * r / 30.0);
+      float compress = 1.0 + 2.5 * exp(-r*r / 30.0);
       gp *= compress;
-
       float gx = abs(fract(gp.x + 0.5) - 0.5) * 2.0;
       float gy = abs(fract(gp.y + 0.5) - 0.5) * 2.0;
       float line = min(gx, gy);
       float grid = 0.04 / (line + 0.04) - 0.5;
-
-      // Darker near black hole (behind disk)
-      float visibility = 0.15 + 0.05 * (1.0 - exp(-r * r / 50.0));
-      return grid * visibility;
+      float vis = 0.12 + 0.04 * (1.0 - exp(-r*r / 50.0));
+      return grid * vis;
     }
 
-    // ---------------------------------------------------------------
-    // Teardrop infalling mass (distance-field based glow)
-    // ---------------------------------------------------------------
-    float teardropGlow(vec2 uv) {
-      // Position: left of the black hole
-      vec2 center = vec2(-7.0, 0.3);
-      float angle = iTime * 0.15;
-      float orbitR = 7.0;
-      center = vec2(-orbitR * cos(angle), orbitR * sin(angle) * 0.4);
-
+    float teardropGlow(vec2 uv, float time) {
+      float angle = time * 0.15;
+      float orbitR = 7.2;
+      vec2 center = vec2(-orbitR * cos(angle), orbitR * sin(angle) * 0.35);
       vec2 d = uv - center;
       float dist = length(d);
-
-      // Teardrop shape: elongated toward black hole
       float elong = 1.0 - 0.6 * smoothstep(-2.0, 4.0, d.x);
       float shape = dist / elong;
-
-      // Glow
-      float glow = 0.0;
-      glow += 0.35 * exp(-shape * shape / 0.3);
-      glow += 0.15 * exp(-shape * shape / 1.2);
-      glow += 0.05 * exp(-shape * shape / 3.0);
-
-      // Pulsation
-      glow *= 0.7 + 0.3 * sin(iTime * 2.5 + angle);
-
+      float glow = 0.32 * exp(-shape*shape / 0.3)
+                 + 0.14 * exp(-shape*shape / 1.2)
+                 + 0.05 * exp(-shape*shape / 3.0);
+      glow *= 0.7 + 0.3 * sin(time * 2.5 + angle);
       return glow;
     }
 
-    // ---------------------------------------------------------------
-    // Main
-    // ---------------------------------------------------------------
     void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-      // --- Coordinate setup ---
       vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
-      // Black hole center (slightly offset for composition)
       vec2 bhUV = uv - vec2(-0.03, 0.02);
 
-      // Camera: far above the equatorial plane, looking down at an angle
+      // Camera above disk plane
       float camDist = 30.0;
-      float camHeight = 18.0;  // above disk plane
+      float camHeight = 18.0;
       vec3 ro = vec3(0.0, camHeight, -camDist);
       vec3 rd = normalize(vec3(uv.x, uv.y - camHeight / camDist, 1.0));
 
-      // --- Background: deep blue gradient ---
-      vec3 bgColor = mix(
-        vec3(0.02, 0.05, 0.16),  // dark navy corner
-        vec3(0.04, 0.08, 0.22),  // brighter center
-        smoothstep(0.0, 0.8, 1.0 - length(bhUV))
-      );
-      vec3 col = bgColor;
+      // Background: deep navy blue gradient
+      float bgL = 1.0 - length(bhUV);
+      vec3 bg = mix(vec3(0.015, 0.04, 0.14), vec3(0.035, 0.07, 0.20), smoothstep(0.0, 0.7, bgL));
+      vec3 col = bg;
 
-      // --- Ray trace to black hole ---
-      vec3 bhCenter = vec3(0.0, 0.0, 0.0);
-      float tHorizon = raySphere(ro, rd, bhCenter, RS * 1.01);
-      float tPhoton  = raySphere(ro, rd, bhCenter, RS * 1.7);
+      // Ray tests
+      vec3 bhC = vec3(0.0);
+      float tHorizon = raySphere(ro, rd, bhC, RS * 1.01);
+      float tOuter   = raySphere(ro, rd, bhC, RS * 1.8);
 
-      // --- Accretion disk intersection ---
-      // Disk lies on y=0 (equatorial plane)
+      // Disk intersection (y = 0 plane)
       float tDisk = -1.0;
-      if (abs(rd.y) > 0.0001) {
-        tDisk = -ro.y / rd.y;  // time to reach y=0 plane
-      }
-
+      if (abs(rd.y) > 0.0001) tDisk = -ro.y / rd.y;
       vec3 hitDisk = ro + rd * tDisk;
       float diskR = length(hitDisk.xz);
+      float diskBehindBH = dot(hitDisk - bhC, rd); // < 0 means behind BH
 
-      // --- Compute gravitational deflection ---
-      // Impact parameter of the ray relative to black hole
-      vec3 rayToBH = bhCenter - ro;
-      float bProj = length(rayToBH - rd * dot(rayToBH, rd)); // perpendicular distance
-
-      // The deflected ray will intersect the disk at a different radius
-      float deflAngle = deflectionAngle(bProj);
-      // Deflection direction: toward the black hole, in the plane perpendicular to ray
-      vec3 deflectDir = normalize(bhCenter - (ro + rd * dot(bhCenter - ro, rd)));
-      // Apply deflection to the disk intersection point
-      vec3 deflectedHit = hitDisk;
-      if (bProj < 8.0 && bProj > 0.01) {
-        float shift = deflAngle * tDisk * 0.15;
-        deflectedHit.xz += deflectDir.xz * shift * bProj;
-        deflectedHit.xz -= bhCenter.xz * shift * 0.3;  // extra pull inward
+      // Impact parameter
+      vec3 rayToBH = bhC - ro;
+      float bProj = length(rayToBH - rd * dot(rayToBH, rd));
+      float defl = deflectionAngle(bProj);
+      // Deflected hit position
+      float deflR = diskR;
+      if (bProj > 0.01 && bProj < 9.0 && defl < 900.0) {
+        float shift = defl * tDisk * 0.1 * bProj;
+        deflR = max(diskR - shift * 0.5, 0.0);
       }
-      float deflectedR = length(deflectedHit.xz);
 
-      // --- Render disk ---
+      // ---- Accretion disk ----
       if (tDisk > 0.0 && diskR < 12.0 && diskR > RS * 1.1) {
-        float r = deflectedR;
-
+        float r = deflR;
         if (r > ISCO && r < 12.0) {
           vec3 dcol = diskColor(r);
 
-          // Hotspot: approaching side (bottom half of disk in screen space)
+          // Doppler: bottom z>0 (approaching) brighter
           float doppler = 1.0;
-          if (deflectedHit.z > 0.0) {
-            // Approaching side — brighter
-            float appFactor = smoothstep(0.0, 10.0, deflectedHit.z);
-            doppler = 1.0 + appFactor * 0.4;
-          }
-          // Receding side — slightly dimmer
-          if (deflectedHit.z < -2.0) {
-            doppler = 0.7;
-          }
-          dcol *= doppler;
+          if (hitDisk.z > 0.0) doppler = 1.0 + smoothstep(0.0, 10.0, hitDisk.z) * 0.4;
+          else if (hitDisk.z < -2.0) doppler = 0.7;
+          dcol *= doppler * (0.95 + 0.05 * sin(hitDisk.z * 0.5 + iTime));
 
-          // Radial brightness falloff
-          float bright = 1.0;
-          if (r < ISCO + 0.8) bright = smoothstep(ISCO, ISCO + 0.8, r);
-          if (r > 9.0) bright = 1.0 - smoothstep(9.0, 12.0, r);
-          dcol *= bright;
+          // Fade near edges
+          float edge = 1.0;
+          if (r < ISCO + 0.6) edge = smoothstep(ISCO, ISCO + 0.6, r);
+          if (r > 9.5) edge *= 1.0 - smoothstep(9.5, 12.0, r);
+          dcol *= edge;
 
           // Inner edge glow
-          float edgeGlow = exp(-(r - ISCO) * (r - ISCO) / 0.4);
-          dcol += vec3(0.5, 0.3, 0.1) * edgeGlow * 0.4;
+          dcol += vec3(0.45, 0.25, 0.08) * exp(-(r-ISCO)*(r-ISCO) / 0.5) * 0.4;
 
-          col = mix(col, dcol, 0.95);
+          col = mix(col, dcol, 0.93);
         }
       }
 
-      // --- Photon ring ---
-      if (tPhoton > 0.0) {
-        float photonDist = abs(bProj - 2.6);
-        float ring = exp(-photonDist * photonDist / 0.008);
-        ring += 0.3 * exp(-photonDist * photonDist / 0.05);
-        // Ring only visible where disk is NOT in front (above hole)
-        float ringVis = smoothstep(RS * 1.5, RS * 2.5, diskR);
-        col += vec3(1.0, 0.7, 0.25) * ring * ringVis * 0.6;
-      }
+      // ---- Photon ring ----
+      float ringDist = abs(bProj - 2.6);
+      float ring = exp(-ringDist*ringDist / 0.006);
+      ring += 0.25 * exp(-ringDist*ringDist / 0.04);
+      // Show ring only above horizon
+      float ringVis = smoothstep(RS * 1.4, RS * 2.6, diskR)
+                    * smoothstep(0.0, 0.3, tDisk)
+                    * step(bProj, 4.0);
+      col += vec3(1.0, 0.65, 0.22) * ring * ringVis * 0.55;
 
-      // --- Black hole shadow ---
+      // ---- Black hole shadow ----
       if (tHorizon > 0.0 && (tDisk < 0.0 || tHorizon < tDisk)) {
-        float shadow = smoothstep(RS * 1.15, RS * 0.85, bProj);
+        float shadow = smoothstep(RS * 1.2, RS * 0.80, bProj);
         col = mix(col, vec3(0.0), shadow);
       }
 
-      // --- Spacetime grid (on equatorial plane, seen through disk) ---
-      if (tDisk > 0.0 && diskR > RS * 1.3) {
+      // ---- Spacetime grid ----
+      if (tDisk > 0.0 && diskR > RS * 1.4 && diskR < 13.0) {
         float grid = gridPattern(hitDisk.xz, diskR);
-        // Grid only visible outside the very bright inner disk
-        float gridVis = smoothstep(ISCO + 0.5, ISCO + 2.5, diskR);
-        col += vec3(0.7, 0.8, 1.0) * grid * gridVis * 0.6;
+        float visG = smoothstep(ISCO + 0.5, ISCO + 3.0, diskR);
+        col += vec3(0.7, 0.8, 1.0) * grid * visG * 0.5;
       }
 
-      // --- Teardrop infalling mass ---
-      float tear = teardropGlow(uv * 10.0);
-      col += vec3(1.0, 0.55, 0.15) * tear;
+      // ---- Teardrop infalling mass ----
+      col += vec3(1.0, 0.55, 0.15) * teardropGlow(uv * 10.0, iTime);
 
-      // --- Vignette ---
-      float vig = 1.0 - smoothstep(0.35, 1.15, length(uv)) * 0.65;
-      col *= vig;
+      // ---- Vignette ----
+      col *= 1.0 - smoothstep(0.35, 1.15, length(uv)) * 0.6;
 
-      // --- Subtle film grain for pixel aesthetic ---
-      float grain = fract(sin(dot(fragCoord, vec2(12.9898, 78.233))) * 43758.5453);
-      col += (grain - 0.5) * 0.025;
+      // ---- Pixel grain ----
+      col += (fract(sin(dot(fragCoord, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.02;
 
       fragColor = vec4(col, 1.0);
     }
-
-    void main() {
-      mainImage(gl_FragColor, gl_FragCoord.xy);
-    }
+    void main() { mainImage(gl_FragColor, gl_FragCoord.xy); }
   `;
 
-  /* ================================================================
-     Vertex Shader — Fullscreen triangle
-     ================================================================ */
   var vertexShader = /* glsl */ `
     varying vec2 vUv;
     void main() {
@@ -283,50 +193,50 @@
   `;
 
   /* ================================================================
-     JS Setup
+     Setup
      ================================================================ */
-  var RENDER_SCALE = 0.4; // internal render at 40% → pixel look + perf
-  var scene, camera, quad, material, renderer, rt, displayCanvas, displayCtx;
-  var uniforms;
+  var SCALE = 0.4;
+  var renderer, scene, camera, quad, material, uniforms;
+  var dispCanvas, dispCtx;
+  var iW, iH, dW, dH;
   var animId;
 
   function init() {
-    // --- Display canvas (full screen, pixelated upscale) ---
-    displayCanvas = document.createElement('canvas');
-    displayCanvas.id = 'blackhole-bg';
-    displayCanvas.style.cssText =
+    iW = Math.floor(window.innerWidth * SCALE);
+    iH = Math.floor(window.innerHeight * SCALE);
+    dW = window.innerWidth;
+    dH = window.innerHeight;
+
+    // ---- Display canvas (full screen, pixelated upscale) ----
+    dispCanvas = document.createElement('canvas');
+    dispCanvas.id = 'blackhole-bg';
+    dispCanvas.style.cssText =
       'position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;image-rendering:pixelated;';
-    document.body.insertBefore(displayCanvas, document.body.firstChild);
-    displayCtx = displayCanvas.getContext('2d');
-    displayCtx.imageSmoothingEnabled = false;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dispCanvas.width = dW * dpr;
+    dispCanvas.height = dH * dpr;
+    document.body.insertBefore(dispCanvas, document.body.firstChild);
+    dispCtx = dispCanvas.getContext('2d');
+    dispCtx.imageSmoothingEnabled = false;
 
-    // --- Three.js renderer ---
-    renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, preserveDrawingBuffer: true });
-    renderer.setPixelRatio(1);
-
-    var iW = Math.floor(window.innerWidth * RENDER_SCALE);
-    var iH = Math.floor(window.innerHeight * RENDER_SCALE);
-    renderer.setSize(iW, iH);
-
-    // --- Render target ---
-    rt = new THREE.WebGLRenderTarget(iW, iH, {
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      format: THREE.RGBAFormat
+    // ---- WebGL renderer (small internal buffer) ----
+    renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      alpha: false,
+      preserveDrawingBuffer: true
     });
+    renderer.setPixelRatio(1);
+    renderer.setSize(iW, iH);
+    renderer.domElement.style.display = 'none'; // hide the raw GL canvas
 
-    // --- Scene ---
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-    // --- Uniforms ---
     uniforms = {
       iResolution: { value: new THREE.Vector2(iW, iH) },
-      iTime: { value: 0 },
-      iMouse: { value: new THREE.Vector2(0, 0) }
+      iTime: { value: 0 }
     };
 
-    // --- Fullscreen quad ---
     material = new THREE.ShaderMaterial({
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
@@ -337,60 +247,43 @@
     quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
     scene.add(quad);
 
-    // --- Events ---
     window.addEventListener('resize', onResize);
-    document.addEventListener('mousemove', function(e) {
-      uniforms.iMouse.value.set(
-        e.clientX / window.innerWidth,
-        1.0 - e.clientY / window.innerHeight
-      );
-    });
-
-    // --- Start ---
     animate(0);
   }
 
   function onResize() {
-    var iW = Math.floor(window.innerWidth * RENDER_SCALE);
-    var iH = Math.floor(window.innerHeight * RENDER_SCALE);
+    iW = Math.floor(window.innerWidth * SCALE);
+    iH = Math.floor(window.innerHeight * SCALE);
+    dW = window.innerWidth;
+    dH = window.innerHeight;
     renderer.setSize(iW, iH);
-    rt.setSize(iW, iH);
     uniforms.iResolution.value.set(iW, iH);
-
-    // Resize display canvas
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    displayCanvas.width = window.innerWidth * dpr;
-    displayCanvas.height = window.innerHeight * dpr;
-    displayCanvas.style.width = window.innerWidth + 'px';
-    displayCanvas.style.height = window.innerHeight + 'px';
+    dispCanvas.width = dW * dpr;
+    dispCanvas.height = dH * dpr;
+    dispCanvas.style.width = dW + 'px';
+    dispCanvas.style.height = dH + 'px';
   }
 
   function animate(ts) {
     animId = requestAnimationFrame(animate);
     uniforms.iTime.value = ts * 0.001;
 
-    // Render at low internal resolution
-    renderer.setRenderTarget(rt);
+    // Render directly to the WebGL canvas (no render target)
     renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
 
-    // Upscale to display canvas (pixelated)
+    // Copy low-res WebGL canvas → fullscreen display canvas (pixelated upscale)
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    displayCanvas.width = window.innerWidth * dpr;
-    displayCanvas.height = window.innerHeight * dpr;
-    displayCtx.imageSmoothingEnabled = false;
-    displayCtx.drawImage(
+    dispCanvas.width = dW * dpr;
+    dispCanvas.height = dH * dpr;
+    dispCtx.imageSmoothingEnabled = false;
+    dispCtx.drawImage(
       renderer.domElement,
-      0, 0,
-      renderer.domElement.width, renderer.domElement.height,
-      0, 0,
-      displayCanvas.width, displayCanvas.height
+      0, 0, iW, iH,
+      0, 0, dispCanvas.width, dispCanvas.height
     );
   }
 
-  /* ================================================================
-     Bootstrap
-     ================================================================ */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
