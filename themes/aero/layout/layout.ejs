@@ -7,19 +7,6 @@
     <title>
         <%= config.title %>
     </title>
-    <!-- Galaxy background CSS (scoped, no destructive resets) -->
-    <style>
-      .experience {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: 0;
-      }
-      .experience canvas {
-        display: block;
-      }
-    </style>
     <%- css('css/style.css') %>
     <% if (theme.favicon.enable) { %>
         <% if (theme.favicon.icon) { %>
@@ -32,8 +19,10 @@
 </head>
 
 <body class="has-taskbar">
-    <!-- Galaxy black hole background directly embedded -->
-    <div class="experience"></div>
+    <!-- Galaxy black hole background: fullscreen iframe with its own HTML/CSS/JS -->
+    <iframe src="/galaxy-bg/" allow="autoplay"
+        style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;border:none;pointer-events:none;"
+        title="background"></iframe>
 
     <div class="container">
         <!-- Desktop Icons -->
@@ -73,49 +62,12 @@
             </header>
             <nav>
                 <ul class="nav-links">
-                    <li>
-                        <a href="/" class="<%= is_home() ? 'active' : '' %>">
-                            <span class="nav-text">
-                                <img src="/image/icon/vista_messenger.jpg" alt="home" class="icon">
-                                <span>Home</span>
-                            </span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/categories/thoughts">
-                            <span class="nav-text">
-                                <img src="/image/icon/vista_messenger.jpg" alt="thoughts" class="icon">想法
-                            </span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/categories/learning">
-                            <span class="nav-text">
-                                <img src="/image/icon/vista_book_1.jpg" alt="learning" class="icon">学习
-                            </span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/spending">
-                            <span class="nav-text">
-                                <img src="/image/icon/vista_photo_gallery.jpg" alt="spending" class="icon">消费
-                            </span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/archives">
-                            <span class="nav-text">
-                                <img src="/image/icon/vista_book_1.jpg" alt="posts" class="icon">时间轴
-                            </span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/about">
-                            <span class="nav-text">
-                                <img src="/image/icon/vista_pc_1.jpg" alt="about" class="icon">关于
-                            </span>
-                        </a>
-                    </li>
+                    <li><a href="/" class="<%= is_home() ? 'active' : '' %>"><span class="nav-text"><img src="/image/icon/vista_messenger.jpg" alt="home" class="icon"><span>Home</span></span></a></li>
+                    <li><a href="/categories/thoughts"><span class="nav-text"><img src="/image/icon/vista_messenger.jpg" alt="thoughts" class="icon">想法</span></a></li>
+                    <li><a href="/categories/learning"><span class="nav-text"><img src="/image/icon/vista_book_1.jpg" alt="learning" class="icon">学习</span></a></li>
+                    <li><a href="/spending"><span class="nav-text"><img src="/image/icon/vista_photo_gallery.jpg" alt="spending" class="icon">消费</span></a></li>
+                    <li><a href="/archives"><span class="nav-text"><img src="/image/icon/vista_book_1.jpg" alt="posts" class="icon">时间轴</span></a></li>
+                    <li><a href="/about"><span class="nav-text"><img src="/image/icon/vista_pc_1.jpg" alt="about" class="icon">关于</span></a></li>
                 </ul>
             </nav>
         </div>
@@ -133,45 +85,27 @@
             </main>
             <div class="sidebar-mask" id="sidebar-mask"></div>
         </div>
-
-        <!-- Remove standalone footer; copyright lives in taskbar tray -->
-
     </div>
 
     <!-- Taskbar -->
     <div class="taskbar">
-        <a href="/" class="taskbar-item <%= is_home() ? 'active' : '' %>">
-            <img src="/image/icon/vista_messenger.jpg" alt="home"> Home
-        </a>
-        <a href="/categories/thoughts" class="taskbar-item">
-            <img src="/image/icon/vista_messenger.jpg" alt="thoughts"> 想法
-        </a>
-        <a href="/categories/learning" class="taskbar-item">
-            <img src="/image/icon/vista_book_1.jpg" alt="learning"> 学习
-        </a>
-        <a href="/spending" class="taskbar-item">
-            <img src="/image/icon/vista_photo_gallery.jpg" alt="spending"> 消费
-        </a>
-        <a href="/archives" class="taskbar-item <%= is_archive() || is_current('archives') ? 'active' : '' %>">
-            <img src="/image/icon/vista_book_1.jpg" alt="archives"> 时间轴
-        </a>
-        <a href="/about" class="taskbar-item <%= is_current('about') ? 'active' : '' %>">
-            <img src="/image/icon/vista_pc_1.jpg" alt="about"> 关于
-        </a>
-
+        <a href="/" class="taskbar-item <%= is_home() ? 'active' : '' %>"><img src="/image/icon/vista_messenger.jpg" alt="home"> Home</a>
+        <a href="/categories/thoughts" class="taskbar-item"><img src="/image/icon/vista_messenger.jpg" alt="thoughts"> 想法</a>
+        <a href="/categories/learning" class="taskbar-item"><img src="/image/icon/vista_book_1.jpg" alt="learning"> 学习</a>
+        <a href="/spending" class="taskbar-item"><img src="/image/icon/vista_photo_gallery.jpg" alt="spending"> 消费</a>
+        <a href="/archives" class="taskbar-item <%= is_archive() || is_current('archives') ? 'active' : '' %>"><img src="/image/icon/vista_book_1.jpg" alt="archives"> 时间轴</a>
+        <a href="/about" class="taskbar-item <%= is_current('about') ? 'active' : '' %>"><img src="/image/icon/vista_pc_1.jpg" alt="about"> 关于</a>
         <div class="taskbar-tray">
             <span style="margin-right:12px;font-size:11px;color:#666;">© <%= date(new Date(), 'YYYY') %> <%= config.author %></span>
             <span class="clock" id="taskbar-clock">--:--</span>
         </div>
     </div>
 
-    <script src="/galaxy-bg/script.js"></script>
     <script src="/js/responsive.js"></script>
     <script src="/js/music.js"></script>
     <script src="/js/desktop.js"></script>
     <script src="/js/image-viewer.js"></script>
 
-    <!-- Taskbar clock -->
     <script>
         (function updateClock() {
             var now = new Date();
@@ -186,18 +120,11 @@
     <% if (theme.math.enable && page.mathjax) { %>
         <script>
             window.MathJax = {
-                tex: {
-                    inlineMath: [['$', '$'], ["\\(", "\\)"]],
-                    displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
-                    processEscapes: true
-                },
-                options: {
-                    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-                }
+                tex: { inlineMath: [['$', '$'], ["\\(", "\\)"]], displayMath: [ ['$$','$$'], ["\\[","\\]"] ], processEscapes: true },
+                options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
             };
         </script>
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
     <% } %>
 </body>
-
 </html>
