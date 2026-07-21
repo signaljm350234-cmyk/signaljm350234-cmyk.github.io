@@ -1,489 +1,399 @@
 /**
- * Black Hole Desktop Background v4 — Qwen-Reference Edition
+ * Black Hole Desktop Background v5 — Three.js GPU Shader
  *
- * Based on detailed multimodal analysis of the reference image.
- * Features:
- *   - Deep navy-blue gradient background
- *   - Spacetime grid (white lines, funnel depression under black hole)
- *   - 3-tier accretion disk: dark-red inner → bright orange-red middle → pale pink outer
- *   - Double-ring gravitational lensing (upper arc + lower flatter arc)
- *   - Left teardrop-shaped orange glowing mass (tidally disrupted stellar material)
- *   - Authentic pixel-art style via low-res internal render + imageSmoothingEnabled:false
- *   - Animated: disk rotates, grid subtle wobble, mass pulses
+ * Renders a physically-based Schwarzschild black hole with:
+ *  - Gravitational lensing (light deflection)
+ *  - Full accretion disk with temperature coloring
+ *  - Photon ring
+ *  - Spacetime curvature grid
+ *  - Teardrop infalling mass
+ *  - Pixel-art upscaling for retro look
+ *
+ * Three.js loaded via CDN in layout template.
+ * This file expects `window.THREE` to be available.
  */
 
 (function() {
-    'use strict';
+  'use strict';
 
-    /* ---- internal render resolution (low → pixel look) ---- */
-    var IR_W = 640;
-    var IR_H;
-    var canvas, ctx, irCanvas, irCtx;
-    var dpr, W, H;
-    var cx, cy, bhR;
-    var gridCanvas, gridCtx;      // spacetime grid (cached, static)
-    var diskCanvas, diskCtx;      // accretion disk base (cached)
-    var shadowCanvas, shadowCtx;  // black hole shadow + photon ring (cached)
-    var massCanvas, massCtx;      // left teardrop mass (cached)
-    var animId;
+  var THREE = window.THREE;
+  if (!THREE) {
+    // Retry after a short delay — CDN might still be loading
+    setTimeout(arguments.callee, 100);
+    return;
+  }
 
-    function init() {
-        canvas = document.createElement('canvas');
-        canvas.id = 'blackhole-bg';
-        canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;image-rendering:pixelated;';
-        document.body.insertBefore(canvas, document.body.firstChild);
-        ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = false;
+  /* ================================================================
+     Fragment Shader — Where everything happens
+     ================================================================ */
+  var fragmentShader = /* glsl */ `
+    precision highp float;
 
-        irCanvas = document.createElement('canvas');
-        irCtx = irCanvas.getContext('2d');
+    uniform vec2  iResolution;
+    uniform float iTime;
+    uniform vec2  iMouse;
 
-        gridCanvas = document.createElement('canvas');
-        gridCtx = gridCanvas.getContext('2d');
+    #define PI   3.14159265359
+    #define TAU  6.28318530718
+    #define RS   1.0
+    #define ISCO 3.0
 
-        diskCanvas = document.createElement('canvas');
-        diskCtx = diskCanvas.getContext('2d');
-
-        shadowCanvas = document.createElement('canvas');
-        shadowCtx = shadowCanvas.getContext('2d');
-
-        massCanvas = document.createElement('canvas');
-        massCtx = massCanvas.getContext('2d');
-
-        sizeAll();
-        buildAllCached();
-        window.addEventListener('resize', onResize);
-        animate();
+    // ---------------------------------------------------------------
+    // Ray-sphere (black hole horizon) hit test
+    // ---------------------------------------------------------------
+    float raySphere(vec3 ro, vec3 rd, vec3 center, float radius) {
+      vec3 oc = ro - center;
+      float b = dot(oc, rd);
+      float c = dot(oc, oc) - radius * radius;
+      float h = b * b - c;
+      if (h < 0.0) return -1.0;
+      float d = -b - sqrt(h);
+      return d > 0.0 ? d : (-b + sqrt(h));
     }
 
-    function sizeAll() {
-        W = window.innerWidth;
-        H = window.innerHeight;
-        dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-        // Main canvas at native resolution
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
-        canvas.style.width = W + 'px';
-        canvas.style.height = H + 'px';
-
-        // Internal render canvas — low res for pixel look
-        IR_H = Math.round(IR_W * (H / W));
-        irCanvas.width = IR_W;
-        irCanvas.height = IR_H;
-
-        // Feature canvases match internal resolution
-        [gridCanvas, diskCanvas, shadowCanvas, massCanvas].forEach(function(c) {
-            c.width = IR_W;
-            c.height = IR_H;
-        });
-
-        // Black hole center in internal coords
-        cx = IR_W * 0.42;
-        cy = IR_H * 0.50;
-        bhR = Math.min(IR_W, IR_H) * 0.16;
+    // ---------------------------------------------------------------
+    // Deflection angle for light passing Schwarzschild black hole
+    // Approximate formula: alpha = 2*rs / b  (weak field)
+    // Strong field correction near photon sphere (b -> sqrt(27)/2 * rs ≈ 2.598)
+    // ---------------------------------------------------------------
+    float deflectionAngle(float b) {
+      float bCrit = 2.598076; // 3*sqrt(3)/2
+      if (b < bCrit * 1.001) return 999.0; // captured
+      // Strong-field approximation
+      float alpha = 2.0 / b;                         // leading order
+      alpha += 15.0 * PI / 16.0 / (b * b * b);     // 2nd order
+      alpha += 1.5 / (b - bCrit);                    // divergence near photon sphere
+      return clamp(alpha, 0.0, PI * 2.0);
     }
 
-    function onResize() {
-        sizeAll();
-        buildAllCached();
+    // ---------------------------------------------------------------
+    // Disk color — temperature profile (Qwen reference)
+    // ---------------------------------------------------------------
+    vec3 diskColor(float r) {
+      float t = (r - ISCO) / 9.0;   // 0 at ISCO, ~1 at outer edge
+      t = clamp(t, 0.0, 1.0);
+
+      vec3 col;
+      if      (t < 0.06) col = vec3(0.55, 0.07, 0.03);  // dark red (inner, redshifted)
+      else if (t < 0.15) col = vec3(0.70, 0.12, 0.04);
+      else if (t < 0.25) col = vec3(0.87, 0.35, 0.06);  // orange-red
+      else if (t < 0.40) col = vec3(1.00, 0.55, 0.14);  // bright orange (main glow)
+      else if (t < 0.55) col = vec3(0.98, 0.47, 0.11);
+      else if (t < 0.70) col = vec3(0.82, 0.28, 0.07);  // cooling
+      else if (t < 0.85) col = vec3(0.60, 0.26, 0.18);  // pale pink
+      else               col = vec3(0.30, 0.12, 0.08);  // fading
+      return col;
     }
 
-    /* ================================================================
-       Cached layer 1: Deep blue background gradient
-       ================================================================ */
-    function drawBG() {
-        var c = irCtx;
-        c.clearRect(0, 0, IR_W, IR_H);
+    // ---------------------------------------------------------------
+    // Spacetime grid — computed on equatorial plane
+    // ---------------------------------------------------------------
+    float gridPattern(vec2 p, float bhDist) {
+      float spacing = 1.5;
+      // Warp grid lines near black hole (funnel depression)
+      float warp = 4.0 * exp(-bhDist * bhDist / 20.0);
+      vec2 gp = p / spacing;
+      // Radial compression near black hole
+      float r = length(p);
+      float compress = 1.0 + 2.5 * exp(-r * r / 30.0);
+      gp *= compress;
 
-        // Navy blue radial gradient — darker corners, slightly lighter center-top
-        var g = c.createRadialGradient(cx, cy - IR_H * 0.08, bhR, cx, cy, Math.max(IR_W, IR_H) * 0.85);
-        g.addColorStop(0, '#0c1c3c');
-        g.addColorStop(0.3, '#0a1834');
-        g.addColorStop(0.6, '#061028');
-        g.addColorStop(1, '#020812');
-        c.fillStyle = g;
-        c.fillRect(0, 0, IR_W, IR_H);
+      float gx = abs(fract(gp.x + 0.5) - 0.5) * 2.0;
+      float gy = abs(fract(gp.y + 0.5) - 0.5) * 2.0;
+      float line = min(gx, gy);
+      float grid = 0.04 / (line + 0.04) - 0.5;
+
+      // Darker near black hole (behind disk)
+      float visibility = 0.15 + 0.05 * (1.0 - exp(-r * r / 50.0));
+      return grid * visibility;
     }
 
-    /* ================================================================
-       Cached layer 2: Spacetime curvature grid
-       ================================================================ */
-    function drawGrid() {
-        var c = gridCtx;
-        c.clearRect(0, 0, IR_W, IR_H);
+    // ---------------------------------------------------------------
+    // Teardrop infalling mass (distance-field based glow)
+    // ---------------------------------------------------------------
+    float teardropGlow(vec2 uv) {
+      // Position: left of the black hole
+      vec2 center = vec2(-7.0, 0.3);
+      float angle = iTime * 0.15;
+      float orbitR = 7.0;
+      center = vec2(-orbitR * cos(angle), orbitR * sin(angle) * 0.4);
 
-        var gridSpacing = IR_W * 0.035;
-        var gridW = IR_W * 1.8;
-        var gridH = IR_H * 1.4;
-        var startX = -gridW * 0.35;
-        var startY = cy - bhR * 1.2;
-        var strength = bhR * 3.0;
+      vec2 d = uv - center;
+      float dist = length(d);
 
-        c.strokeStyle = 'rgba(200,210,230,0.16)';
-        c.lineWidth = 0.5;
+      // Teardrop shape: elongated toward black hole
+      float elong = 1.0 - 0.6 * smoothstep(-2.0, 4.0, d.x);
+      float shape = dist / elong;
 
-        // Horizontal lines (curved downward near black hole)
-        for (var gy = -gridH * 0.2; gy < gridH; gy += gridSpacing) {
-            c.beginPath();
-            var firstPoint = true;
-            for (var gx = -gridW * 0.3; gx < gridW; gx += gridSpacing * 0.5) {
-                var dx = gx - cx;
-                var dy = gy - (cy + bhR * 0.3);
-                var dist = Math.sqrt(dx * dx + dy * dy);
-                var depression = 0;
-                if (dist < strength * 2) {
-                    depression = strength * 1.2 * Math.exp(-(dist * dist) / (2 * strength * strength));
-                }
-                var sx = startX + gx;
-                var sy = startY + gy + depression;
-                if (firstPoint) { c.moveTo(sx, sy); firstPoint = false; }
-                else { c.lineTo(sx, sy); }
-            }
-            c.stroke();
+      // Glow
+      float glow = 0.0;
+      glow += 0.35 * exp(-shape * shape / 0.3);
+      glow += 0.15 * exp(-shape * shape / 1.2);
+      glow += 0.05 * exp(-shape * shape / 3.0);
+
+      // Pulsation
+      glow *= 0.7 + 0.3 * sin(iTime * 2.5 + angle);
+
+      return glow;
+    }
+
+    // ---------------------------------------------------------------
+    // Main
+    // ---------------------------------------------------------------
+    void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+      // --- Coordinate setup ---
+      vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
+      // Black hole center (slightly offset for composition)
+      vec2 bhUV = uv - vec2(-0.03, 0.02);
+
+      // Camera: far above the equatorial plane, looking down at an angle
+      float camDist = 30.0;
+      float camHeight = 18.0;  // above disk plane
+      vec3 ro = vec3(0.0, camHeight, -camDist);
+      vec3 rd = normalize(vec3(uv.x, uv.y - camHeight / camDist, 1.0));
+
+      // --- Background: deep blue gradient ---
+      vec3 bgColor = mix(
+        vec3(0.02, 0.05, 0.16),  // dark navy corner
+        vec3(0.04, 0.08, 0.22),  // brighter center
+        smoothstep(0.0, 0.8, 1.0 - length(bhUV))
+      );
+      vec3 col = bgColor;
+
+      // --- Ray trace to black hole ---
+      vec3 bhCenter = vec3(0.0, 0.0, 0.0);
+      float tHorizon = raySphere(ro, rd, bhCenter, RS * 1.01);
+      float tPhoton  = raySphere(ro, rd, bhCenter, RS * 1.7);
+
+      // --- Accretion disk intersection ---
+      // Disk lies on y=0 (equatorial plane)
+      float tDisk = -1.0;
+      if (abs(rd.y) > 0.0001) {
+        tDisk = -ro.y / rd.y;  // time to reach y=0 plane
+      }
+
+      vec3 hitDisk = ro + rd * tDisk;
+      float diskR = length(hitDisk.xz);
+
+      // --- Compute gravitational deflection ---
+      // Impact parameter of the ray relative to black hole
+      vec3 rayToBH = bhCenter - ro;
+      float bProj = length(rayToBH - rd * dot(rayToBH, rd)); // perpendicular distance
+
+      // The deflected ray will intersect the disk at a different radius
+      float deflAngle = deflectionAngle(bProj);
+      // Deflection direction: toward the black hole, in the plane perpendicular to ray
+      vec3 deflectDir = normalize(bhCenter - (ro + rd * dot(bhCenter - ro, rd)));
+      // Apply deflection to the disk intersection point
+      vec3 deflectedHit = hitDisk;
+      if (bProj < 8.0 && bProj > 0.01) {
+        float shift = deflAngle * tDisk * 0.15;
+        deflectedHit.xz += deflectDir.xz * shift * bProj;
+        deflectedHit.xz -= bhCenter.xz * shift * 0.3;  // extra pull inward
+      }
+      float deflectedR = length(deflectedHit.xz);
+
+      // --- Render disk ---
+      if (tDisk > 0.0 && diskR < 12.0 && diskR > RS * 1.1) {
+        float r = deflectedR;
+
+        if (r > ISCO && r < 12.0) {
+          vec3 dcol = diskColor(r);
+
+          // Hotspot: approaching side (bottom half of disk in screen space)
+          float doppler = 1.0;
+          if (deflectedHit.z > 0.0) {
+            // Approaching side — brighter
+            float appFactor = smoothstep(0.0, 10.0, deflectedHit.z);
+            doppler = 1.0 + appFactor * 0.4;
+          }
+          // Receding side — slightly dimmer
+          if (deflectedHit.z < -2.0) {
+            doppler = 0.7;
+          }
+          dcol *= doppler;
+
+          // Radial brightness falloff
+          float bright = 1.0;
+          if (r < ISCO + 0.8) bright = smoothstep(ISCO, ISCO + 0.8, r);
+          if (r > 9.0) bright = 1.0 - smoothstep(9.0, 12.0, r);
+          dcol *= bright;
+
+          // Inner edge glow
+          float edgeGlow = exp(-(r - ISCO) * (r - ISCO) / 0.4);
+          dcol += vec3(0.5, 0.3, 0.1) * edgeGlow * 0.4;
+
+          col = mix(col, dcol, 0.95);
         }
+      }
 
-        // Vertical lines (curved toward center near black hole)
-        for (var gx2 = -gridW * 0.3; gx2 < gridW; gx2 += gridSpacing) {
-            c.beginPath();
-            var firstPoint2 = true;
-            for (var gy2 = -gridH * 0.2; gy2 < gridH; gy2 += gridSpacing * 0.5) {
-                var dx2 = gx2 - cx;
-                var dy2 = gy2 - (cy + bhR * 0.3);
-                var dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-                var depression2 = 0;
-                if (dist2 < strength * 2) {
-                    depression2 = strength * 1.2 * Math.exp(-(dist2 * dist2) / (2 * strength * strength));
-                }
-                // Radial pull toward center
-                var pullX = 0;
-                if (dist2 < strength * 1.5 && dist2 > 0.1) {
-                    pullX = (cx - gx2) * 0.25 * Math.exp(-(dist2 * dist2) / (3 * strength * strength));
-                }
-                var sx2 = startX + gx2 + pullX;
-                var sy2 = startY + gy2 + depression2;
-                if (firstPoint2) { c.moveTo(sx2, sy2); firstPoint2 = false; }
-                else { c.lineTo(sx2, sy2); }
-            }
-            c.stroke();
-        }
+      // --- Photon ring ---
+      if (tPhoton > 0.0) {
+        float photonDist = abs(bProj - 2.6);
+        float ring = exp(-photonDist * photonDist / 0.008);
+        ring += 0.3 * exp(-photonDist * photonDist / 0.05);
+        // Ring only visible where disk is NOT in front (above hole)
+        float ringVis = smoothstep(RS * 1.5, RS * 2.5, diskR);
+        col += vec3(1.0, 0.7, 0.25) * ring * ringVis * 0.6;
+      }
+
+      // --- Black hole shadow ---
+      if (tHorizon > 0.0 && (tDisk < 0.0 || tHorizon < tDisk)) {
+        float shadow = smoothstep(RS * 1.15, RS * 0.85, bProj);
+        col = mix(col, vec3(0.0), shadow);
+      }
+
+      // --- Spacetime grid (on equatorial plane, seen through disk) ---
+      if (tDisk > 0.0 && diskR > RS * 1.3) {
+        float grid = gridPattern(hitDisk.xz, diskR);
+        // Grid only visible outside the very bright inner disk
+        float gridVis = smoothstep(ISCO + 0.5, ISCO + 2.5, diskR);
+        col += vec3(0.7, 0.8, 1.0) * grid * gridVis * 0.6;
+      }
+
+      // --- Teardrop infalling mass ---
+      float tear = teardropGlow(uv * 10.0);
+      col += vec3(1.0, 0.55, 0.15) * tear;
+
+      // --- Vignette ---
+      float vig = 1.0 - smoothstep(0.35, 1.15, length(uv)) * 0.65;
+      col *= vig;
+
+      // --- Subtle film grain for pixel aesthetic ---
+      float grain = fract(sin(dot(fragCoord, vec2(12.9898, 78.233))) * 43758.5453);
+      col += (grain - 0.5) * 0.025;
+
+      fragColor = vec4(col, 1.0);
     }
 
-    /* ================================================================
-       Cached layer 3: Accretion disk (3-tier color, full double-ring)
-       ================================================================ */
-    function drawBaseDisk() {
-        var c = diskCtx;
-        c.clearRect(0, 0, IR_W, IR_H);
-
-        var outerR = bhR * 3.0;
-        var innerR = bhR * 1.18;
-        var diskH = outerR * 0.11;
-
-        // Near side (bottom half, in front of black hole): full brightness
-        var ringCount = 400;
-
-        for (var i = 0; i < ringCount; i++) {
-            var t = i / ringCount;
-            var r = 1.0 - t * (1 - innerR / outerR);
-            var rx = outerR * r;
-            var ry = diskH * r;
-
-            // 3-tier radial color (Qwen reference):
-            // inner → dark red (红移暗红)
-            // middle → bright orange-red (亮橙红)
-            // outer → pale pink (淡粉红)
-            var cr, cg, cb, alpha;
-
-            if (t < 0.08) {
-                cr = 140; cg = 18; cb = 8; alpha = 0.55;     // Slightly off-event-horizon, dimmer
-            } else if (t < 0.15) {
-                cr = 180; cg = 30; cb = 10; alpha = 0.70;
-            } else if (t < 0.25) {
-                cr = 220; cg = 55; cb = 14; alpha = 0.82;    // Dark→transition
-            } else if (t < 0.35) {
-                cr = 248; cg = 95; cb = 22; alpha = 0.88;    // Bright orange-red (main glow)
-            } else if (t < 0.48) {
-                cr = 255; cg = 140; cb = 35; alpha = 0.84;   // Peak brightness
-            } else if (t < 0.58) {
-                cr = 248; cg = 115; cb = 28; alpha = 0.72;   // Cooling
-            } else if (t < 0.68) {
-                cr = 235; cg = 85; cb = 18; alpha = 0.54;
-            } else if (t < 0.78) {
-                cr = 210; cg = 65; cb = 30; alpha = 0.32;    // Fading
-            } else if (t < 0.88) {
-                cr = 200; cg = 90; cb = 70; alpha = 0.15;    // Pale pink
-            } else {
-                cr = 180; cg = 100; cb = 90; alpha = 0.05;   // Fading to nothing
-            }
-
-            // Thickness variation: disk gets slightly thicker at middle radii, thinner at edges
-            var thickFactor = 1.0;
-            if (t > 0.15 && t < 0.6) thickFactor = 1.3;
-            else if (t > 0.7) thickFactor = 0.7;
-
-            c.strokeStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + alpha + ')';
-            c.lineWidth = Math.max(0.3, ry * 0.7 * thickFactor);
-
-            // Near side: bottom half (0 → PI)
-            c.beginPath();
-            c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI);
-            c.stroke();
-        }
-
-        // Far side top arc (lensing): upper half, much brighter near the shadow edge, fades outward
-        // This creates the "double ring" — the upper arc is the far side light bent over the top
-        for (var j = 0; j < 200; j++) {
-            var t2 = j / 200;
-            var r2 = 1.0 - t2 * (1 - innerR / outerR);
-            var rrx = outerR * r2;
-            var rry = diskH * r2;
-
-            var topCr, topCg, topCb, topAlpha;
-
-            if (t2 < 0.05) {
-                topCr = 255; topCg = 200; topCb = 80; topAlpha = 0.55;   // Bright lensed arc
-            } else if (t2 < 0.15) {
-                topCr = 255; topCg = 175; topCb = 55; topAlpha = 0.40;
-            } else if (t2 < 0.30) {
-                topCr = 248; topCg = 120; topCb = 30; topAlpha = 0.22;
-            } else if (t2 < 0.50) {
-                topCr = 230; topCg = 70; topCb = 20; topAlpha = 0.10;
-            } else {
-                topCr = 200; topCg = 80; topCb = 60; topAlpha = 0.03;
-            }
-
-            c.strokeStyle = 'rgba(' + topCr + ',' + topCg + ',' + topCb + ',' + topAlpha + ')';
-            c.lineWidth = Math.max(0.3, rry * 0.6);
-
-            // Near side: top half (PI → 2PI)
-            c.beginPath();
-            c.ellipse(cx, cy, rrx, rry, 0, Math.PI, Math.PI * 2);
-            c.stroke();
-        }
+    void main() {
+      mainImage(gl_FragColor, gl_FragCoord.xy);
     }
+  `;
 
-    /* ================================================================
-       Cached layer 4: Black hole shadow + glow + photon rings
-       ================================================================ */
-    function drawShadowAndGlow() {
-        var c = shadowCtx;
-        c.clearRect(0, 0, IR_W, IR_H);
-
-        // Wide warm glow halo
-        var glow = c.createRadialGradient(cx, cy, bhR * 0.3, cx, cy, bhR * 3.5);
-        glow.addColorStop(0, 'rgba(255,100,20,0.22)');
-        glow.addColorStop(0.3, 'rgba(255,60,10,0.08)');
-        glow.addColorStop(0.6, 'rgba(200,30,5,0.02)');
-        glow.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = glow;
-        c.fillRect(0, 0, IR_W, IR_H);
-
-        // Inner hot ring glow (the bright ring right at the event horizon edge)
-        var hot = c.createRadialGradient(cx, cy, bhR * 0.6, cx, cy, bhR * 1.6);
-        hot.addColorStop(0, 'rgba(255,180,60,0.35)');
-        hot.addColorStop(0.5, 'rgba(255,120,25,0.12)');
-        hot.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = hot;
-        c.fillRect(cx - bhR * 2, cy - bhR * 2, bhR * 4, bhR * 4);
-
-        // Event horizon (black disc with soft edge)
-        var horizon = c.createRadialGradient(cx, cy, bhR * 0.45, cx, cy, bhR * 1.08);
-        horizon.addColorStop(0, '#000000');
-        horizon.addColorStop(0.5, '#000000');
-        horizon.addColorStop(0.7, 'rgba(0,0,0,0.5)');
-        horizon.addColorStop(1, 'rgba(0,0,0,0)');
-        c.fillStyle = horizon;
-        c.beginPath();
-        c.arc(cx, cy, bhR * 1.08, 0, Math.PI * 2);
-        c.fill();
-
-        // Inner photon ring (bright thin ring at 1.02 bhR)
-        c.strokeStyle = 'rgba(255,190,70,0.7)';
-        c.lineWidth = bhR * 0.032;
-        c.shadowColor = 'rgba(255,150,40,0.45)';
-        c.shadowBlur = bhR * 0.16;
-        c.beginPath();
-        c.arc(cx, cy, bhR * 1.02, 0, Math.PI * 2);
-        c.stroke();
-        c.shadowBlur = 0;
-
-        // Outer photon ring (very thin, at 1.10 bhR)
-        c.strokeStyle = 'rgba(255,165,50,0.28)';
-        c.lineWidth = bhR * 0.012;
-        c.beginPath();
-        c.arc(cx, cy, bhR * 1.10, 0, Math.PI * 2);
-        c.stroke();
+  /* ================================================================
+     Vertex Shader — Fullscreen triangle
+     ================================================================ */
+  var vertexShader = /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
     }
+  `;
 
-    /* ================================================================
-       Cached layer 5: Left teardrop mass (tidally disrupted stellar material)
-       ================================================================ */
-    function drawMass() {
-        var c = massCtx;
-        c.clearRect(0, 0, IR_W, IR_H);
+  /* ================================================================
+     JS Setup
+     ================================================================ */
+  var RENDER_SCALE = 0.4; // internal render at 40% → pixel look + perf
+  var scene, camera, quad, material, renderer, rt, displayCanvas, displayCtx;
+  var uniforms;
+  var animId;
 
-        // Position: left of the black hole, slightly above disk plane
-        var mx = cx - bhR * 2.8;
-        var my = cy - bhR * 0.3;
-        var mw = bhR * 0.7;
-        var mh = bhR * 1.1;
+  function init() {
+    // --- Display canvas (full screen, pixelated upscale) ---
+    displayCanvas = document.createElement('canvas');
+    displayCanvas.id = 'blackhole-bg';
+    displayCanvas.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;image-rendering:pixelated;';
+    document.body.insertBefore(displayCanvas, document.body.firstChild);
+    displayCtx = displayCanvas.getContext('2d');
+    displayCtx.imageSmoothingEnabled = false;
 
-        // Teardrop shape: build with overlapping ellipses
-        // Head (round, bright)
-        var headGrad = c.createRadialGradient(mx, my - mh * 0.1, 0, mx, my, mw * 0.8);
-        headGrad.addColorStop(0, 'rgba(255,210,90,0.9)');
-        headGrad.addColorStop(0.3, 'rgba(255,150,35,0.75)');
-        headGrad.addColorStop(0.6, 'rgba(240,80,15,0.4)');
-        headGrad.addColorStop(1, 'rgba(200,30,5,0)');
-        c.fillStyle = headGrad;
+    // --- Three.js renderer ---
+    renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(1);
 
-        c.beginPath();
-        c.ellipse(mx, my, mw * 0.55, mh * 0.45, 0, 0, Math.PI * 2);
-        c.fill();
+    var iW = Math.floor(window.innerWidth * RENDER_SCALE);
+    var iH = Math.floor(window.innerHeight * RENDER_SCALE);
+    renderer.setSize(iW, iH);
 
-        // Tail (stretching toward black hole, tapering)
-        var tailX1 = mx + mw * 0.3;
-        var tailY1 = my;
-        var tailX2 = mx + mw * 2.5;
-        var tailY2 = my + bhR * 0.15;
+    // --- Render target ---
+    rt = new THREE.WebGLRenderTarget(iW, iH, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      format: THREE.RGBAFormat
+    });
 
-        c.beginPath();
-        c.moveTo(tailX1, tailY1 - mh * 0.2);
-        c.quadraticCurveTo(tailX2 * 0.7, tailY2 - mh * 0.1, tailX2, tailY2);
-        c.lineTo(tailX2, tailY2 + mh * 0.08);
-        c.quadraticCurveTo(tailX2 * 0.7, tailY1 + mh * 0.2, tailX1, tailY1 + mh * 0.15);
-        c.closePath();
+    // --- Scene ---
+    scene = new THREE.Scene();
+    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-        var tailGrad = c.createLinearGradient(tailX1, 0, tailX2, 0);
-        tailGrad.addColorStop(0, 'rgba(255,140,35,0.7)');
-        tailGrad.addColorStop(0.5, 'rgba(240,80,15,0.3)');
-        tailGrad.addColorStop(1, 'rgba(200,30,5,0)');
-        c.fillStyle = tailGrad;
-        c.fill();
-    }
+    // --- Uniforms ---
+    uniforms = {
+      iResolution: { value: new THREE.Vector2(iW, iH) },
+      iTime: { value: 0 },
+      iMouse: { value: new THREE.Vector2(0, 0) }
+    };
 
-    function buildAllCached() {
-        drawBG();             // internal canvas background
-        drawGrid();           // spacetime grid
-        drawBaseDisk();       // accretion disk
-        drawShadowAndGlow();  // black hole shadow + rings
-        drawMass();           // left teardrop mass
-    }
+    // --- Fullscreen quad ---
+    material = new THREE.ShaderMaterial({
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader,
+      uniforms: uniforms,
+      depthWrite: false,
+      depthTest: false
+    });
+    quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    scene.add(quad);
 
-    /* ================================================================
-       Per-frame animations
-       ================================================================ */
-    function renderFrame(ts) {
-        var t = ts * 0.001;
-        // Re-draw background first
-        drawBG();
+    // --- Events ---
+    window.addEventListener('resize', onResize);
+    document.addEventListener('mousemove', function(e) {
+      uniforms.iMouse.value.set(
+        e.clientX / window.innerWidth,
+        1.0 - e.clientY / window.innerHeight
+      );
+    });
 
-        // Layer 1: Grid (cached)
-        irCtx.drawImage(gridCanvas, 0, 0);
+    // --- Start ---
+    animate(0);
+  }
 
-        // Layer 2: Base disk (cached)
-        irCtx.drawImage(diskCanvas, 0, 0);
+  function onResize() {
+    var iW = Math.floor(window.innerWidth * RENDER_SCALE);
+    var iH = Math.floor(window.innerHeight * RENDER_SCALE);
+    renderer.setSize(iW, iH);
+    rt.setSize(iW, iH);
+    uniforms.iResolution.value.set(iW, iH);
 
-        // Layer 3: Rotating swirl arcs (differential rotation)
-        drawSwirls(t);
+    // Resize display canvas
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    displayCanvas.width = window.innerWidth * dpr;
+    displayCanvas.height = window.innerHeight * dpr;
+    displayCanvas.style.width = window.innerWidth + 'px';
+    displayCanvas.style.height = window.innerHeight + 'px';
+  }
 
-        // Layer 4: Black hole shadow + photon rings (cached)
-        irCtx.drawImage(shadowCanvas, 0, 0);
+  function animate(ts) {
+    animId = requestAnimationFrame(animate);
+    uniforms.iTime.value = ts * 0.001;
 
-        // Layer 5: Photon ring breathing pulse
-        drawRingPulse(t);
+    // Render at low internal resolution
+    renderer.setRenderTarget(rt);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
 
-        // Layer 6: Teardrop mass (cached)
-        irCtx.drawImage(massCanvas, 0, 0);
+    // Upscale to display canvas (pixelated)
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    displayCanvas.width = window.innerWidth * dpr;
+    displayCanvas.height = window.innerHeight * dpr;
+    displayCtx.imageSmoothingEnabled = false;
+    displayCtx.drawImage(
+      renderer.domElement,
+      0, 0,
+      renderer.domElement.width, renderer.domElement.height,
+      0, 0,
+      displayCanvas.width, displayCanvas.height
+    );
+  }
 
-        // Layer 7: Teardrop mass pulsation overlay
-        drawMassPulse(t);
-
-        // Layer 8: Vignette
-        drawVignette();
-
-        // Scale internal → display canvas (pixelated)
-        ctx.clearRect(0, 0, W * dpr, H * dpr);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(irCanvas, 0, 0, W * dpr, H * dpr);
-    }
-
-    /* ---- Rotating swirl arcs ---- */
-    function drawSwirls(t) {
-        var outerR = bhR * 3.0;
-        var diskH = outerR * 0.11;
-        irCtx.save();
-        irCtx.globalCompositeOperation = 'lighter';
-
-        // 5 bright arcs rotating at differential speeds
-        for (var a = 0; a < 5; a++) {
-            var radius = 0.5 + a * 0.09;
-            if (radius > 0.92) radius -= 0.4;
-            var rx = outerR * radius;
-            var ry = diskH * radius;
-            var speed = 1.0 / (radius * radius + 0.25);
-            var center = t * speed + a * 1.2;
-            var len = 0.28 + Math.sin(t * 0.35 + a) * 0.08;
-
-            irCtx.strokeStyle = 'rgba(255,240,200,0.16)';
-            irCtx.lineWidth = Math.max(0.6, ry * 0.9);
-            irCtx.beginPath();
-            irCtx.ellipse(cx, cy, rx, ry, 0, center, center + len);
-            irCtx.stroke();
-        }
-        irCtx.restore();
-    }
-
-    /* ---- Photon ring breathing ---- */
-    function drawRingPulse(t) {
-        var p = 0.5 + 0.5 * Math.sin(t * 1.4) * Math.sin(t * 0.55 + 0.8);
-        irCtx.strokeStyle = 'rgba(255,200,80,' + (p * 0.7).toFixed(3) + ')';
-        irCtx.lineWidth = bhR * 0.04;
-        irCtx.shadowColor = 'rgba(255,150,45,' + (p * 0.4).toFixed(3) + ')';
-        irCtx.shadowBlur = bhR * 0.2;
-        irCtx.beginPath();
-        irCtx.arc(cx, cy, bhR * 1.02, 0, Math.PI * 2);
-        irCtx.stroke();
-        irCtx.shadowBlur = 0;
-    }
-
-    /* ---- Left mass gentle pulsation ---- */
-    function drawMassPulse(t) {
-        var mx = cx - bhR * 2.8;
-        var my = cy - bhR * 0.3;
-        var p = 0.6 + 0.4 * Math.sin(t * 1.9 + 1.0);
-
-        irCtx.save();
-        irCtx.globalCompositeOperation = 'lighter';
-        var g = irCtx.createRadialGradient(mx, my, 0, mx, my, bhR * 0.7);
-        g.addColorStop(0, 'rgba(255,200,80,' + (p * 0.3).toFixed(3) + ')');
-        g.addColorStop(1, 'rgba(255,100,20,0)');
-        irCtx.fillStyle = g;
-        irCtx.fillRect(mx - bhR * 1.5, my - bhR * 1.5, bhR * 3, bhR * 3);
-        irCtx.restore();
-    }
-
-    /* ---- Vignette ---- */
-    function drawVignette() {
-        var g = irCtx.createRadialGradient(cx, cy, Math.max(IR_W, IR_H) * 0.45, cx, cy, Math.max(IR_W, IR_H) * 0.9);
-        g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(0.5, 'rgba(0,0,0,0)');
-        g.addColorStop(1, 'rgba(0,2,8,0.55)');
-        irCtx.fillStyle = g;
-        irCtx.fillRect(0, 0, IR_W, IR_H);
-    }
-
-    /* ================================================================ */
-    function animate(ts) {
-        if (!ts) ts = performance.now();
-        renderFrame(ts);
-        animId = requestAnimationFrame(animate);
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+  /* ================================================================
+     Bootstrap
+     ================================================================ */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
