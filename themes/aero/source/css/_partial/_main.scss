@@ -4,24 +4,24 @@ body {
     font-family: var(--font-body);
     color: var(--pc98-text);
     margin: 0;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     background-color: var(--pc98-blue);
     background-image:
         radial-gradient(ellipse at 20% 30%, rgba(74, 108, 212, 0.15) 0%, transparent 50%),
         radial-gradient(ellipse at 80% 70%, rgba(74, 108, 212, 0.1) 0%, transparent 50%);
     background-attachment: fixed;
-    overflow-x: hidden;
 }
 
 /* Desktop container */
 .container {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
+    display: block;
+    height: 100vh;
     max-width: 100%;
     margin: 0;
     padding: 0;
     position: relative;
+    overflow: hidden;
 }
 
 /* ===== PC-98 Window ===== */
@@ -106,8 +106,9 @@ body {
 .main-layout {
     position: relative;
     width: 100%;
-    min-height: calc(100vh - 50px);
+    height: 100vh;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 /* All desktop windows are absolutely positioned and draggable */

@@ -8,6 +8,29 @@
     .main-layout {
         display: block;
         padding: 8px;
+        height: auto;
+        overflow: visible;
+    }
+
+    body {
+        height: auto;
+        overflow-y: auto;
+    }
+
+    .container {
+        height: auto;
+        overflow: visible;
+    }
+
+    .desktop-window {
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: auto !important;
+        max-height: none !important;
+        margin: 8px;
     }
 
     .header {

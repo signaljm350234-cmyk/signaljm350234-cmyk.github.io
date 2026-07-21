@@ -223,10 +223,7 @@
     overflow: auto;
 }
 
-/* ===== Page body spacing (account for taskbar) ===== */
-body.has-taskbar {
-    padding-bottom: 40px;
-}
+/* ===== Page body — no scroll, taskbar overlays bottom ===== */
 
 /* ===== Desktop title window (formerly header) ===== */
 .desktop-title-window {

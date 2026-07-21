@@ -118,8 +118,8 @@
             <div class="sidebar-mask" id="sidebar-mask"></div>
         </div>
 
-        <!-- footer — only visible on non-home pages -->
-        <%- partial('_partial/footer') %>
+        <!-- Remove standalone footer; copyright lives in taskbar tray -->
+
     </div>
 
     <!-- Taskbar -->
@@ -144,6 +144,7 @@
         </a>
 
         <div class="taskbar-tray">
+            <span style="margin-right:12px;font-size:11px;color:#666;">© <%= date(new Date(), 'YYYY') %> <%= config.author %></span>
             <span class="clock" id="taskbar-clock">--:--</span>
         </div>
     </div>
