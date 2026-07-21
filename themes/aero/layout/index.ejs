@@ -1,5 +1,6 @@
 <!-- PC-98 Window: Article List -->
-<div class="card pc98-window">
+<div class="desktop-window win-posts draggable-element" style="top:50px;left:110px;width:560px;max-height:75vh;">
+<div class="card pc98-window" style="height:100%;display:flex;flex-direction:column;">
     <div class="pc98-titlebar">
         <span class="title-text">Posts</span>
         <span>_ &#9744; &#10005;</span>
@@ -10,7 +11,7 @@
         <span class="menu-item"><span class="underline">V</span>iew</span>
         <span class="menu-item"><span class="underline">H</span>elp</span>
     </div>
-    <div class="pc98-window-body" style="padding:8px;">
+    <div class="pc98-window-body undraggable-element" style="padding:8px;flex:1;overflow-y:auto;">
         <section class="post-list">
             <% page.posts.forEach(function(post){ %>
             <article class="card post-item">
@@ -45,4 +46,5 @@
             <%- paginator({ prev_text: '<' , next_text: '>' }) %>
         </nav>
     </div>
+</div>
 </div>

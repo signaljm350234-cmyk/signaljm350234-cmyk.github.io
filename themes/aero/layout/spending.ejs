@@ -1,5 +1,6 @@
 <!-- PC-98 Window: Spending Records -->
-<div class="card pc98-window">
+<div class="desktop-window win-spending draggable-element" style="top:40px;left:120px;width:640px;max-height:80vh;">
+<div class="card pc98-window" style="height:100%;display:flex;flex-direction:column;">
     <div class="pc98-titlebar">
         <span class="title-text"><%= page.title %></span>
         <span>_ &#9744; &#10005;</span>
@@ -10,7 +11,7 @@
         <span class="menu-item"><span class="underline">V</span>iew</span>
         <span class="menu-item"><span class="underline">H</span>elp</span>
     </div>
-    <div class="pc98-window-body" style="padding:16px;">
+    <div class="pc98-window-body undraggable-element" style="flex:1;overflow-y:auto;padding:16px;">
         <style>
           .spending-grid {
             display: grid;
@@ -158,4 +159,5 @@
           renderSpending();
         </script>
     </div>
+</div>
 </div>

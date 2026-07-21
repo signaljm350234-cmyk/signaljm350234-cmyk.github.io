@@ -1,5 +1,6 @@
 <!-- PC-98 Window: Post Detail -->
-<div class="card post-full pc98-window">
+<div class="desktop-window win-post draggable-element" style="top:40px;left:200px;width:620px;max-height:80vh;">
+<div class="card post-full pc98-window" style="height:100%;display:flex;flex-direction:column;">
     <div class="pc98-titlebar">
         <span class="title-text"><%= page.title %></span>
         <span>_ &#9744; &#10005;</span>
@@ -10,7 +11,7 @@
         <span class="menu-item"><span class="underline">V</span>iew</span>
         <span class="menu-item"><span class="underline">H</span>elp</span>
     </div>
-    <div class="pc98-window-body">
+    <div class="pc98-window-body undraggable-element" style="flex:1;overflow-y:auto;">
         <div class="post-meta">
             <%= date(page.date, 'YYYY-MM-DD' ) %>
             <% if (page.tags && page.tags.length) { %>
@@ -26,4 +27,5 @@
             <%- page.content %>
         </div>
     </div>
+</div>
 </div>

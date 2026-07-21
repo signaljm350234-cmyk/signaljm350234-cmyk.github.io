@@ -1,56 +1,77 @@
-<div class="widget avatar-widget">
-    <div class="avatar-bg">
-        <a href="<%= url_for(theme.profile.avatar_link) %>">
-            <img src="<%= url_for(theme.profile.avatar) %>" class="profile-img">
-        </a>
-    </div>
-</div>
-<div class="widget card profile-widget">
-    <div class="profile">
-        <div><%= theme.profile.author || config.author %></div>
-        <div>
-            <% if (theme.profile.social) { %>
-            <% theme.profile.social.forEach(function(item) { %>
-                <a href="<%= url_for(item.link) %>" class="button profile-link" target="_blank" title="<%= item.name %>">
-                    <img src="<%= url_for(item.icon) %>" class="profile-icon" alt="<%= item.name %>">
-                </a>
-            <% }); %>
-        <% } %>
+<!-- Profile Desktop Window -->
+<div class="desktop-window win-profile draggable-element" style="top:180px;left:16px;width:250px;">
+    <div class="card pc98-window">
+        <div class="pc98-titlebar">
+            <span class="title-text">Profile</span>
+            <span>_ &#9744; &#10005;</span>
         </div>
-    </div>
-    <div class="about">
-        <%- config.description %>
-    </div>
-</div>
-
-
-<div class="widget music-widget">
-    <div class="player-content">
-        <div class="song-info">
-            <div class="info-bg album-art" id="albumArt"></div>
-            <div class="info-bg title-bar">
-                <span class="song-title" id="songTitle">Loading...</span>
+        <div class="pc98-window-body">
+            <div class="widget avatar-widget">
+                <div class="avatar-bg">
+                    <a href="<%= url_for(theme.profile.avatar_link) %>">
+                        <img src="<%= url_for(theme.profile.avatar) %>" class="profile-img">
+                    </a>
+                </div>
+            </div>
+            <div class="widget card profile-widget">
+                <div class="profile">
+                    <div><%= theme.profile.author || config.author %></div>
+                    <div>
+                        <% if (theme.profile.social) { %>
+                        <% theme.profile.social.forEach(function(item) { %>
+                            <a href="<%= url_for(item.link) %>" class="button profile-link" target="_blank" title="<%= item.name %>">
+                                <img src="<%= url_for(item.icon) %>" class="profile-icon" alt="<%= item.name %>">
+                            </a>
+                        <% }); %>
+                    <% } %>
+                    </div>
+                </div>
+                <div class="about">
+                    <%- config.description %>
+                </div>
             </div>
         </div>
+    </div>
+</div>
 
-        <div class="info-bg progress-container" id="progressContainer">
-            <div class="progress-bar" id="progressBar"></div>
+<!-- Music Desktop Window -->
+<div class="desktop-window win-music draggable-element" style="top:420px;left:16px;width:250px;">
+    <div class="card pc98-window">
+        <div class="pc98-titlebar">
+            <span class="title-text">Music Player</span>
+            <span>_ &#9744; &#10005;</span>
         </div>
+        <div class="pc98-window-body" style="padding:8px;">
+            <div class="widget music-widget">
+                <div class="player-content">
+                    <div class="song-info">
+                        <div class="info-bg album-art" id="albumArt"></div>
+                        <div class="info-bg title-bar">
+                            <span class="song-title" id="songTitle">Loading...</span>
+                        </div>
+                    </div>
 
-        <div class="controls">
-            <button class="button play-btn" id="playBtn">
-                <span id="playIcon" class="ri-play-large-fill"></span>
-            </button>
-            <button class="button ctrl-btn" id="prevBtn">
-                <span class="ri-skip-back-fill"></span>
-            </button>
-            <button class="button ctrl-btn" id="nextBtn">
-                <span class="ri-skip-forward-fill"></span>
-            </button>
+                    <div class="info-bg progress-container" id="progressContainer">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+
+                    <div class="controls">
+                        <button class="button play-btn" id="playBtn">
+                            <span id="playIcon" class="ri-play-large-fill"></span>
+                        </button>
+                        <button class="button ctrl-btn" id="prevBtn">
+                            <span class="ri-skip-back-fill"></span>
+                        </button>
+                        <button class="button ctrl-btn" id="nextBtn">
+                            <span class="ri-skip-forward-fill"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <audio id="audioPlayer"></audio>
+            </div>
         </div>
     </div>
-
-    <audio id="audioPlayer"></audio>
 </div>
 
 <script>

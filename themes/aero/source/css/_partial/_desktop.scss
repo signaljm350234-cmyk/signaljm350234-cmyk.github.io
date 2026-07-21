@@ -158,6 +158,27 @@
     position: relative;
 }
 
+/* When a pc98-window is a top-level desktop window, it's absolute positioned */
+.desktop-window {
+    position: absolute;
+    cursor: grab;
+    user-select: none;
+    min-width: 250px;
+}
+.desktop-window:active {
+    cursor: grabbing;
+}
+
+/* Default window positions */
+.desktop-window.win-posts      { top: 50px;  left: 110px; width: 560px; max-height: 75vh; }
+.desktop-window.win-post       { top: 40px;  left: 200px; width: 620px; max-height: 80vh; }
+.desktop-window.win-archives   { top: 50px;  left: 150px; width: 520px; max-height: 75vh; }
+.desktop-window.win-about      { top: 50px;  left: 180px; width: 480px; max-height: 70vh; }
+.desktop-window.win-spending   { top: 40px;  left: 120px; width: 640px; max-height: 80vh; }
+.desktop-window.win-profile    { top: 180px; left: 16px;  width: 250px; }
+.desktop-window.win-music      { top: 420px; left: 16px;  width: 250px; }
+.desktop-window.win-title      { top: 16px;  right: 16px; width: 200px; }
+
 .pc98-titlebar {
     font-family: var(--font-ui);
     font-size: 12px;
