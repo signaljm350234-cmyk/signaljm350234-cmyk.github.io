@@ -6,11 +6,7 @@ body {
     margin: 0;
     height: 100vh;
     overflow: hidden;
-    background-color: var(--pc98-blue);
-    background-image:
-        radial-gradient(ellipse at 20% 30%, rgba(74, 108, 212, 0.15) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 70%, rgba(74, 108, 212, 0.1) 0%, transparent 50%);
-    background-attachment: fixed;
+    background-color: #000008;
 }
 
 /* Desktop container */
