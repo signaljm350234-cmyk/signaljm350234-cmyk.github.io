@@ -183,3 +183,46 @@ GitHub Actions auto-deploys within ~30 seconds.
 3. **Black background, no galaxy**: The iframe src `/galaxy-bg/` might not be loading — check browser Network tab
 4. **Windows not draggable**: Check that `desktop.js` is loaded and no JS errors in console
 5. **Intro animation not playing**: Check the `<% if (is_home()) { %>` blocks in `layout.ejs` — the animation CSS styles and camera-rig HTML are both gated by this condition
+
+---
+
+## Claude Code Environment (for OpenCode migration)
+
+The original Claude Code environment had these installed. OpenCode should install equivalents:
+
+### Skills (in `~/.claude/skills/`)
+| Skill | Purpose |
+|-------|---------|
+| `academic-paper` | 12-agent paper writing pipeline |
+| `academic-paper-reviewer` | Multi-perspective peer review simulation |
+| `academic-pipeline` | Full academic research pipeline orchestrator |
+| `deep-research` | 13-agent deep research team |
+| `agently-mail` | Email operations via agently-cli |
+| `easyeda-api` | PCB design with EasyEDA Pro |
+| `shared` | Shared references across all academic skills |
+
+### Plugin (via marketplace)
+```
+/plugin marketplace add Imbad0202/academic-research-skills
+/plugin install academic-research-skills
+```
+This provides 10 slash commands: `/ars-full`, `/ars-plan`, `/ars-outline`, `/ars-revision`, `/ars-revision-coach`, `/ars-abstract`, `/ars-lit-review`, `/ars-format-convert`, `/ars-citation-check`, `/ars-disclosure`
+
+### Environment config (~/.claude/settings.json)
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:15721",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-7[1M]",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6[1M]",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5"
+  }
+}
+```
+Custom model routing through local proxy at port 15721 (DeepSeek models).
+
+### VPN hook (~/.claude/scripts/vpn-pre-tool-use.sh)
+Bash/WebFetch tools auto-trigger VPN pre-check before network calls.
+
+### vision.js (at `C:\Users\ROG\vision.js`)
+Qwen multimodal image analysis script — NOT part of the website project but used for screenshot analysis during development. Calls local Qwen API endpoint.
